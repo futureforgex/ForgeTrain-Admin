@@ -1,0 +1,74 @@
+
+{
+  "title": "Quiz Question",
+  "description": "Schema for a quiz question form",
+  "type": "object",
+  "required": [
+    "question",
+    "options",
+    "correctAnswer",
+    "explanation",
+    "difficulty",
+    "timeAllowed"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique identifier for the question"
+    },
+    "question": {
+      "type": "string",
+      "description": "The question text",
+      "minLength": 5,
+      "maxLength": 500
+    },
+    "options": {
+      "type": "array",
+      "description": "Answer options",
+      "minItems": 2,
+      "maxItems": 6,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      }
+    },
+    "correctAnswer": {
+      "type": "integer",
+      "description": "Index of the correct answer (zero-based)",
+      "minimum": 0
+    },
+    "explanation": {
+      "type": "string",
+      "description": "Explanation of the correct answer",
+      "minLength": 5,
+      "maxLength": 1000
+    },
+    "difficulty": {
+      "type": "string",
+      "description": "Difficulty level of the question",
+      "enum": ["easy", "medium", "hard"]
+    },
+    "timeAllowed": {
+      "type": "integer",
+      "description": "Time allowed for the question in seconds",
+      "minimum": 15,
+      "maximum": 300,
+      "default": 60
+    },
+    "tags": {
+      "type": "array",
+      "description": "Tags for categorizing the question",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 30
+      }
+    },
+    "imageUrl": {
+      "type": "string",
+      "description": "URL to an image related to the question (optional)",
+      "format": "uri"
+    }
+  }
+}
