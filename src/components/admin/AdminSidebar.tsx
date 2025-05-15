@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import {
@@ -14,6 +14,8 @@ import {
   Video,
   ClipboardList,
   Library,
+  Layers,
+  Plus,
 } from 'lucide-react';
 
 type NavItem = {
@@ -25,18 +27,18 @@ type NavItem = {
 const mainNavItems: NavItem[] = [
   { name: 'Dashboard', href: '/admin', icon: Home },
   { name: 'Users', href: '/admin/users', icon: Users },
+  { name: 'Modules', href: '/admin/modules', icon: Layers },
   { name: 'Learning Content', href: '/admin/content', icon: BookOpen },
   { name: 'Text Tutorials', href: '/admin/text-tutorials', icon: BookOpen },
   { name: 'Video Tutorials', href: '/admin/video-tutorials', icon: Video },
   { name: 'Project Tasks', href: '/admin/project-tasks', icon: ClipboardList },
   { name: 'Quizzes', href: '/admin/quizzes', icon: FileQuestion },
-  { name: 'Learning Resources', href: '/admin/learning-resources', icon: Library },
+  { name: 'Code Challenges', href: '/admin/code-challenges', icon: FileQuestion },
   { name: 'Placement Drives', href: '/admin/drives', icon: Calendar },
   { name: 'Leaderboards', href: '/admin/leaderboards', icon: Award },
   { name: 'Announcements', href: '/admin/announcements', icon: Bell },
   { name: 'Analytics', href: '/admin/analytics', icon: BarChart },
   { name: 'Settings', href: '/admin/settings', icon: Settings },
-  { name: 'Code Challenges', href: '/admin/code-challenges', icon: FileQuestion },
 ];
 
 interface AdminSidebarProps {
@@ -46,7 +48,7 @@ interface AdminSidebarProps {
 
 const AdminSidebar = ({ collapsed = false, onToggleCollapse }: AdminSidebarProps) => {
   const location = useLocation();
-  
+
   return (
     <aside className={cn(
       "bg-sidebar h-full flex-shrink-0 border-r border-sidebar-border transition-all duration-300",

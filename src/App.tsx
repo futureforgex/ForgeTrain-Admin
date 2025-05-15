@@ -14,39 +14,73 @@ import Quizzes from './pages/admin/Quizzes';
 import TextTutorials from './pages/admin/TextTutorials';
 import VideoTutorials from './pages/admin/VideoTutorials';
 import ProjectTasks from './pages/admin/ProjectTasks';
-import LearningResources from './pages/LearningResources';
+import ModulePage from './pages/admin/ModulePage';
+import LoginPage from "@/pages/admin/LoginPage";
+import RequireAuth from "@/components/auth/RequireAuth";
+import { createContext, useContext, useEffect, useState } from "react";
+import { auth } from "@/lib/firebase";
+import { onAuthStateChanged, User } from "firebase/auth";
+
+// AuthProvider context
+export const AuthContext = createContext<{ user: User | null, loading: boolean }>({ user: null, loading: true });
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+      setLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+  return (
+    <AuthContext.Provider value={{ user, loading }}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export function useAuth() {
+  return useContext(AuthContext);
+}
 
 const queryClient = new QueryClient();
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          
-          {/* Admin Routes */}
-          <Route path="/admin" element={<AdminLayout />}>
-            <Route index element={<Dashboard />} />
-            <Route path="users" element={<UsersPage />} />
-            <Route path="content" element={<LearningContent />} />
-            <Route path="code-challenges" element={<CodeChallenges />} />
-            <Route path="quizzes" element={<Quizzes />} />
-            <Route path="text-tutorials" element={<TextTutorials />} />
-            <Route path="video-tutorials" element={<VideoTutorials />} />
-            <Route path="project-tasks" element={<ProjectTasks />} />
-            <Route path="learning-resources" element={<LearningResources />} />
-            {/* More admin routes will be added later */}
-          </Route>
-          
-          {/* Catch-all route */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
+  <AuthProvider>
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <Routes>
+            {/* Login route is public */}
+            <Route path="/admin/login" element={<LoginPage />} />
+
+            {/* All other routes require authentication */}
+            <Route element={<RequireAuth />}>
+              <Route path="/" element={<Index />} />
+              <Route path="/admin" element={<AdminLayout />}>
+                <Route index element={<Dashboard />} />
+                <Route path="users" element={<UsersPage />} />
+                <Route path="modules" element={<ModulePage />} />
+                <Route path="content" element={<LearningContent />} />
+                <Route path="code-challenges" element={<CodeChallenges />} />
+                <Route path="quizzes" element={<Quizzes />} />
+                <Route path="text-tutorials" element={<TextTutorials />} />
+                <Route path="video-tutorials" element={<VideoTutorials />} />
+                <Route path="project-tasks" element={<ProjectTasks />} />
+                {/* More admin routes will be added later */}
+              </Route>
+              {/* Catch-all route (also protected) */}
+              <Route path="*" element={<NotFound />} />
+            </Route>
+          </Routes>
+        </BrowserRouter>
+      </TooltipProvider>
+    </QueryClientProvider>
+  </AuthProvider>
 );
 
 export default App;
