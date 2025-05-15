@@ -125,7 +125,7 @@ export function AddLessonModal({ open, onClose, onSelect, moduleId }: AddLessonM
 
       const codeChallenges = challengesSnap.docs.map(doc => ({
         id: doc.id,
-        title: doc.data().slug,
+        title: doc.data().title || doc.data().slug,
         type: "code" as Resource['type'],
         description: doc.data().description,
         tags: doc.data().editorTags || [],

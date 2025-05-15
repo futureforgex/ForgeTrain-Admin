@@ -9,6 +9,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
+import { serverTimestamp } from "firebase/firestore";
 
 interface ModuleListProps {
   modules: any[]; // or your Module type
@@ -34,7 +35,7 @@ export function ModuleList({ modules, loading, onEditModule, onViewModule, viewM
   };
 
   const renderTableView = () => (
-    <div className="bg-white rounded-lg shadow overflow-hidden">
+    <div className="bg-white rounded-lg shadow overflow-visible relative">
       <table className="min-w-full divide-y divide-gray-200">
         <thead className="bg-gray-50">
           <tr>
@@ -81,17 +82,26 @@ export function ModuleList({ modules, loading, onEditModule, onViewModule, viewM
                 {module.lessons ? module.lessons.length : 0} lessons
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-500">
-                <div>{module.lastEdited || '-'}</div>
+                <div>
+                  {module.lastEdited
+                    ? format(new Date(module.lastEdited), 'yyyy-MM-dd HH:mm')
+                    : '-'}
+                </div>
                 <div className="text-xs">{module.editor || '-'}</div>
                         </td>
-                        <td className="px-6 py-4 text-right">
+                        <td className="px-6 py-4 text-right align-middle" style={{ minWidth: 64 }}>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="sm">
-                                <MoreVertical className="h-4 w-4" />
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="hover:bg-gray-200 focus:bg-gray-200"
+                                aria-label="Open actions"
+                              >
+                                <MoreVertical className="h-5 w-5 text-gray-700" />
                               </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
+                            <DropdownMenuContent align="end" className="z-50">
                               <DropdownMenuItem onClick={() => onEditModule(module)}>
                                 <Edit className="mr-2 h-4 w-4" />
                                 Edit

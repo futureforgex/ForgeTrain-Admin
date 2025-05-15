@@ -1,7 +1,7 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp } from 'firebase/app';
 import { getFirestore, Firestore } from 'firebase/firestore';
-import { getStorage } from 'firebase/storage';
+import { getStorage, connectStorageEmulator } from 'firebase/storage';
 import { getAuth } from "firebase/auth";
 
 const firebaseConfig = {
@@ -15,9 +15,15 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 export const firestore = getFirestore(app);
-export const storage = getStorage(app); 
+export const storage = getStorage(app);
+
+// Configure storage for development
+if (import.meta.env.DEV) {
+  // In development, we might want to use the emulator
+  // connectStorageEmulator(storage, 'localhost', 9199);
+}
+
 export const auth = getAuth(app);

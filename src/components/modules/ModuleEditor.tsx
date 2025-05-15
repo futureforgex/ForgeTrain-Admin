@@ -32,6 +32,7 @@ interface Lesson {
   type: 'video' | 'quiz' | 'code' | 'text' | 'project';
   status: 'draft' | 'ready' | 'published';
   resourceRef: any;
+  orderNumber: number;
 }
 
 interface Module {
@@ -96,13 +97,28 @@ export function ModuleEditor({ module, onClose, onSave }: ModuleEditorProps) {
   };
 
   const handleSaveModule = async () => {
+    if (uploading) {
+      setUploadError("Please wait for the image to finish uploading.");
+      return;
+    }
+    if (!formData.thumbnailUrl) {
+      setUploadError("Please upload a thumbnail image before saving.");
+      return;
+    }
+    const now = new Date().toISOString();
     if (module && module.id) {
       // Update existing module
       const moduleRef = doc(db, "modules", module.id);
-      await updateDoc(moduleRef, deepRemoveUndefined(formData));
+      await updateDoc(moduleRef, {
+        ...deepRemoveUndefined(formData),
+        lastEdited: now,
+      });
     } else {
       // Create new module
-      await addDoc(collection(db, "modules"), deepRemoveUndefined(formData));
+      await addDoc(collection(db, "modules"), {
+        ...deepRemoveUndefined(formData),
+        lastEdited: now,
+      });
     }
     if (onSave) onSave();
     onClose();
@@ -131,19 +147,41 @@ export function ModuleEditor({ module, onClose, onSave }: ModuleEditorProps) {
 
     setUploading(true);
     try {
-      const fileName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+      // Create a safe filename by removing special characters and spaces
+      const safeFileName = file.name.replace(/[^a-zA-Z0-9.]/g, '_').toLowerCase();
+      const timestamp = Date.now();
+      const fileName = `${timestamp}_${safeFileName}`;
+      
+      // Create a reference to the file location in Firebase Storage
       const storageRef = ref(storage, `module-thumbnails/${fileName}`);
-      // Upload file
-      const uploadTask = await uploadBytes(storageRef, file);
-      // Get download URL
-      const url = await getDownloadURL(uploadTask.ref);
+      
+      // Upload the file
+      const uploadResult = await uploadBytes(storageRef, file);
+      
+      // Get the download URL
+      const downloadURL = await getDownloadURL(uploadResult.ref);
+      
       // Update form data with new URL
-      setFormData(prev => ({ ...prev, thumbnailUrl: url }));
+      setFormData(prev => ({ ...prev, thumbnailUrl: downloadURL }));
+      
       // Clear any previous errors
       setUploadError(null);
     } catch (err) {
       console.error('Upload error:', err);
-      setUploadError('Failed to upload image. Please try again.');
+      // Provide more specific error messages based on the error type
+      if (err instanceof Error) {
+        if (err.message.includes('storage/unauthorized')) {
+          setUploadError('You do not have permission to upload files.');
+        } else if (err.message.includes('storage/canceled')) {
+          setUploadError('Upload was canceled.');
+        } else if (err.message.includes('storage/retry-limit-exceeded')) {
+          setUploadError('Upload failed after multiple retries. Please try again.');
+        } else {
+          setUploadError('Failed to upload image. Please try again.');
+        }
+      } else {
+        setUploadError('An unexpected error occurred. Please try again.');
+      }
     } finally {
       setUploading(false);
     }
@@ -434,6 +472,7 @@ export function ModuleEditor({ module, onClose, onSave }: ModuleEditorProps) {
                           type,
                           status: 'draft',
                           resourceRef: resource,
+                          orderNumber: (prev.lessons?.length || 0) + 1
                         }
                       ]
                     }));
@@ -441,34 +480,79 @@ export function ModuleEditor({ module, onClose, onSave }: ModuleEditorProps) {
                   }}
                 />
                 {formData.lessons && formData.lessons.length > 0 ? (
-                  <div className="space-y-2 mt-4 max-h-72 overflow-y-auto pr-2">
-                    {formData.lessons.map((lesson, idx) => (
-                      <div key={lesson.id || idx} className="flex items-center gap-4 bg-white rounded shadow p-3 border hover:shadow-md transition-shadow">
-                        <span className="text-xl">{getLessonTypeIcon(lesson.type)}</span>
-                        <div className="flex-1">
-                          <div className="font-medium text-gray-900">{lesson.title}</div>
-                          <div className="text-xs text-gray-500 capitalize">{lesson.type}</div>
-                        </div>
-                        <Badge className={getLessonStatusColor(lesson.status)}>
-                          {lesson.status}
-                        </Badge>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          aria-label="Remove Lesson"
-                          className="text-red-500 hover:bg-red-100"
-                          onClick={() => {
-                            setFormData(prev => ({
-                              ...prev,
-                              lessons: prev.lessons?.filter((_, i) => i !== idx) || []
-                            }));
-                          }}
+                  <DragDropContext onDragEnd={(result) => {
+                    if (!result.destination) return;
+                    
+                    const items = Array.from(formData.lessons || []);
+                    const [reorderedItem] = items.splice(result.source.index, 1);
+                    items.splice(result.destination.index, 0, reorderedItem);
+                    
+                    // Update order numbers
+                    const updatedItems = items.map((item, index) => ({
+                      ...item,
+                      orderNumber: index + 1
+                    }));
+                    
+                    setFormData(prev => ({
+                      ...prev,
+                      lessons: updatedItems
+                    }));
+                  }}>
+                    <Droppable droppableId="lessons">
+                      {(provided) => (
+                        <div
+                          {...provided.droppableProps}
+                          ref={provided.innerRef}
+                          className="space-y-2 mt-4 max-h-72 overflow-y-auto pr-2"
                         >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
+                          {formData.lessons.map((lesson, idx) => (
+                            <Draggable key={lesson.id || idx} draggableId={lesson.id || `lesson-${idx}`} index={idx}>
+                              {(provided) => (
+                                <div
+                                  ref={provided.innerRef}
+                                  {...provided.draggableProps}
+                                  className="flex items-center gap-4 bg-white rounded shadow p-3 border hover:shadow-md transition-shadow"
+                                >
+                                  <div {...provided.dragHandleProps} className="cursor-grab">
+                                    <GripVertical className="h-5 w-5 text-gray-400" />
+                                  </div>
+                                  <span className="text-xl">{getLessonTypeIcon(lesson.type)}</span>
+                                  <div className="flex-1">
+                                    <div className="font-medium text-gray-900">{lesson.title}</div>
+                                    <div className="text-xs text-gray-500 capitalize">{lesson.type}</div>
+                                  </div>
+                                  <Badge className={getLessonStatusColor(lesson.status)}>
+                                    {lesson.status}
+                                  </Badge>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    aria-label="Remove Lesson"
+                                    className="text-red-500 hover:bg-red-100"
+                                    onClick={() => {
+                                      setFormData(prev => {
+                                        const updatedLessons = prev.lessons?.filter((_, i) => i !== idx) || [];
+                                        return {
+                                          ...prev,
+                                          lessons: updatedLessons.map((lesson, index) => ({
+                                            ...lesson,
+                                            orderNumber: index + 1
+                                          }))
+                                        };
+                                      });
+                                    }}
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              )}
+                            </Draggable>
+                          ))}
+                          {provided.placeholder}
+                        </div>
+                      )}
+                    </Droppable>
+                  </DragDropContext>
                 ) : (
                   <div className="text-gray-500 mt-4">No lessons added yet.</div>
                 )}
@@ -481,7 +565,11 @@ export function ModuleEditor({ module, onClose, onSave }: ModuleEditorProps) {
             <Button variant="outline" onClick={onClose} className="hover:bg-gray-100">
               Cancel
             </Button>
-            <Button onClick={handleSaveModule} className="bg-indigo-600 text-white font-semibold px-6 py-2 rounded shadow hover:bg-indigo-700">
+            <Button
+              onClick={handleSaveModule}
+              className="bg-indigo-600 text-white font-semibold px-6 py-2 rounded shadow hover:bg-indigo-700"
+              disabled={uploading}
+            >
               Save Module
             </Button>
           </div>
