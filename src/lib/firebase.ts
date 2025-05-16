@@ -5,13 +5,13 @@ import { getStorage, connectStorageEmulator } from 'firebase/storage';
 import { getAuth } from "firebase/auth";
 
 const firebaseConfig = {
-  // Replace with your Firebase config
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID
+  apiKey: "AIzaSyCopHhxolOcf2s-AbRFoVuBj2JJ_rvSsE4",
+  authDomain: "forgetrain-e32fe.firebaseapp.com",
+  projectId: "forgetrain-e32fe",
+  storageBucket: "forgetrain-e32fe.firebasestorage.app",
+  messagingSenderId: "677978301218",
+  appId: "1:677978301218:web:d44818dd7083535c3b7b7b",
+  measurementId: "G-W37ME9SS7H"
 };
 
 // Initialize Firebase

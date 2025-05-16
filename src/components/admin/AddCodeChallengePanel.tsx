@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { firestore } from '@/lib/firebase';
 import { doc, setDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import MonacoEditor from "@monaco-editor/react";
 
 interface AddCodeChallengePanelProps {
   onClose: () => void;
@@ -275,19 +276,30 @@ export function AddCodeChallengePanel({ onClose, initialData }: AddCodeChallenge
                 ))}
               </div>
             </div>
-            <div>
-              <label className="block font-medium mb-1">Starter Code</label>
-              <div className="flex flex-wrap gap-4">
+            <div className="bg-white rounded-lg shadow p-4 mb-6 border">
+              <h3 className="text-lg font-semibold mb-2">Starter Code</h3>
+              <div className="flex flex-wrap gap-6">
                 {languages.map(lang => (
-                  <div key={lang} className="flex flex-col">
-                    <span className="text-xs font-semibold mb-1">{LANGUAGES.find(l => l.value === lang)?.label || lang}</span>
-                    <Textarea
-                      value={starterCode[lang]}
-                      onChange={e => setStarterCode({ ...starterCode, [lang]: e.target.value })}
-                      rows={4}
-                      className="w-56"
-                      placeholder={`Starter code for ${lang}`}
-                    />
+                  <div key={lang} className="flex flex-col mb-4" style={{ width: 400 }}>
+                    <label className="text-xs font-semibold mb-1">
+                      {LANGUAGES.find(l => l.value === lang)?.label || lang}
+                    </label>
+                    <div className="rounded border border-gray-200 overflow-hidden">
+                      <MonacoEditor
+                        height="150px"
+                        defaultLanguage={lang}
+                        language={lang}
+                        value={starterCode[lang]}
+                        onChange={value => setStarterCode({ ...starterCode, [lang]: value || "" })}
+                        options={{
+                          minimap: { enabled: false },
+                          fontSize: 14,
+                          wordWrap: "on",
+                          scrollBeyondLastLine: false,
+                          automaticLayout: true,
+                        }}
+                      />
+                    </div>
                   </div>
                 ))}
               </div>
@@ -722,9 +734,13 @@ export function AddCodeChallengePanel({ onClose, initialData }: AddCodeChallenge
           {TABS.map((tab, idx) => (
             <button
               key={tab}
-              className={`py-3 px-4 text-sm font-medium border-b-2 transition-colors ${activeTab === idx ? 'border-blue-600 text-blue-700 bg-white' : 'border-transparent text-gray-500 hover:text-blue-600'}`}
+              className={`py-3 px-4 text-sm font-medium border-b-2 transition-colors flex items-center gap-2
+                ${activeTab === idx
+                  ? 'border-blue-600 text-blue-700 bg-white shadow'
+                  : 'border-transparent text-gray-500 hover:text-blue-600'}`}
               onClick={() => setActiveTab(idx)}
             >
+              {/* Optionally add an icon here */}
               {tab}
             </button>
           ))}

@@ -3,7 +3,7 @@ import { firestore, storage } from '@/lib/firebase';
 import { collection, getDocs, deleteDoc, doc, updateDoc, addDoc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Edit, Trash2, Eye, Plus, Save, Clock, Image, FileText, Settings } from 'lucide-react';
+import { Edit, Trash2, Eye, Plus, Save, Clock, Image, FileText, Settings, FileCode } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -40,6 +40,11 @@ interface Tutorial {
   readingLevel: 'easy' | 'medium' | 'hard';
   createdAt: Date;
   updatedAt: Date;
+}
+
+// Helper for Firestore Timestamp
+function isFirestoreTimestamp(obj: any): obj is { seconds: number } {
+  return obj && typeof obj === 'object' && typeof obj.seconds === 'number';
 }
 
 export default function TextTutorials() {
@@ -132,7 +137,7 @@ export default function TextTutorials() {
       toast({
         title: 'Warning',
         description: 'Body content seems too short. Consider adding more content.',
-        variant: 'warning',
+        variant: 'default',
       });
     }
 
@@ -332,7 +337,6 @@ export default function TextTutorials() {
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2 mb-1">
-                  <Badge variant="secondary" className="capitalize">{tutorial.difficulty}</Badge>
                   <Badge variant="secondary" className="capitalize">{tutorial.category}</Badge>
                   {tutorial.tags && tutorial.tags.map(tag => (
                     <Badge key={tag} variant="outline" className="text-xs border-gray-300 bg-gray-100 text-gray-600">
@@ -638,9 +642,9 @@ export default function TextTutorials() {
                       <Label>Publish Date</Label>
                       <DateTimePicker
                         value={currentTutorial.publishDate
-                          ? (currentTutorial.publishDate.seconds
+                          ? (isFirestoreTimestamp(currentTutorial.publishDate)
                               ? new Date(currentTutorial.publishDate.seconds * 1000)
-                              : new Date(currentTutorial.publishDate)
+                              : new Date(currentTutorial.publishDate as any)
                             )
                           : undefined
                         }
@@ -701,95 +705,124 @@ export default function TextTutorials() {
       {/* View Modal */}
       {viewId && selectedTutorial && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-lg p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto relative">
-            <button
-              className="absolute top-4 right-4 text-xl text-gray-400 hover:text-gray-700 focus:outline-none"
-              onClick={() => setViewId(null)}
-              aria-label="Close"
-            >
-              ×
-            </button>
-            <h2 className="text-2xl font-bold mb-2">{selectedTutorial.title}</h2>
-            <div className="mb-2 text-sm text-gray-600">
-              <span className="font-mono">Slug: {selectedTutorial.slug}</span>
-            </div>
-            <div className="mb-4 text-gray-700">
-              <strong>Introduction:</strong>
-              <div className="prose prose-sm max-w-none">
-                <ReactMarkdown>{selectedTutorial.introduction}</ReactMarkdown>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto relative border border-gray-200">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-indigo-500 to-blue-500 rounded-t-2xl px-8 py-6 flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-bold text-white mb-1 flex items-center gap-2">
+                  {selectedTutorial.title}
+                  <span className={
+                    selectedTutorial.status === 'published'
+                      ? 'bg-green-600 text-white text-xs px-2 py-1 rounded ml-2'
+                      : 'bg-yellow-500 text-white text-xs px-2 py-1 rounded ml-2'
+                  }>
+                    {selectedTutorial.status}
+                  </span>
+                </h2>
+                <div className="flex flex-wrap gap-4 text-xs text-indigo-100 font-medium">
+                  <span><FileText className="inline h-4 w-4 mr-1" />Slug: <span className="font-mono text-white">{selectedTutorial.slug}</span></span>
+                  {selectedTutorial.publishDate && (
+                    <span><Clock className="inline h-4 w-4 mr-1" />Published: {
+                      (selectedTutorial.publishDate instanceof Date)
+                        ? selectedTutorial.publishDate.toLocaleString()
+                        : isFirestoreTimestamp(selectedTutorial.publishDate as any)
+                          ? new Date((selectedTutorial.publishDate as any).seconds * 1000).toLocaleString()
+                          : ''
+                    }</span>
+                  )}
+                  <span><Badge className="bg-blue-200 text-blue-800 ml-1">{selectedTutorial.readingLevel}</Badge></span>
+                  <span><Clock className="inline h-4 w-4 mr-1" />{selectedTutorial.estimatedReadTime} min read</span>
+                </div>
               </div>
+              <button
+                className="text-2xl text-white hover:text-indigo-200 focus:outline-none ml-4"
+                onClick={() => setViewId(null)}
+                aria-label="Close"
+              >
+                ×
+              </button>
             </div>
-            <div className="mb-4 text-gray-700">
-              <strong>Body:</strong>
-              <div className="prose prose-sm max-w-none">
-                <ReactMarkdown>{selectedTutorial.body}</ReactMarkdown>
+            <div className="px-8 py-6 bg-gray-50 rounded-b-2xl">
+              {/* Tags & Category */}
+              <div className="mb-4 flex flex-wrap gap-2 items-center">
+                <Badge variant="secondary" className="capitalize bg-indigo-100 text-indigo-700 border-none">{selectedTutorial.category}</Badge>
+                {selectedTutorial.tags && selectedTutorial.tags.map(tag => (
+                  <Badge key={tag} variant="outline" className="text-xs border-gray-300 bg-gray-200 text-gray-700">{tag}</Badge>
+                ))}
               </div>
-            </div>
-            <div className="mb-4 text-gray-700">
-              <strong>Conclusion:</strong>
-              <div className="prose prose-sm max-w-none">
-                <ReactMarkdown>{selectedTutorial.conclusion}</ReactMarkdown>
+              {/* Introduction */}
+              <div className="mb-6">
+                <h3 className="font-semibold text-lg flex items-center gap-2 mb-2"><FileText className="h-5 w-5 text-indigo-400" />Introduction</h3>
+                <div className="prose prose-sm max-w-none bg-white rounded p-4 border">
+                  <ReactMarkdown>{selectedTutorial.introduction}</ReactMarkdown>
+                </div>
               </div>
-            </div>
-            <div className="mb-4 flex flex-wrap gap-2">
-              <Badge variant="secondary" className="capitalize">{selectedTutorial.category}</Badge>
-              {selectedTutorial.tags && selectedTutorial.tags.map(tag => (
-                <Badge key={tag} variant="outline" className="text-xs border-gray-300 bg-gray-100 text-gray-600">{tag}</Badge>
-              ))}
-            </div>
-            <div className="mb-2 text-xs text-gray-500">
-              Status: <span className={selectedTutorial.status === 'published' ? 'text-green-600' : 'text-yellow-600'}>{selectedTutorial.status}</span>
-              {selectedTutorial.publishDate && (
-                <span> | Published: {new Date(selectedTutorial.publishDate.seconds ? selectedTutorial.publishDate.seconds * 1000 : selectedTutorial.publishDate).toLocaleString()}</span>
+              {/* Body */}
+              <div className="mb-6">
+                <h3 className="font-semibold text-lg flex items-center gap-2 mb-2"><FileText className="h-5 w-5 text-indigo-400" />Body</h3>
+                <div className="prose prose-sm max-w-none bg-white rounded p-4 border">
+                  <ReactMarkdown>{selectedTutorial.body}</ReactMarkdown>
+                </div>
+              </div>
+              {/* Conclusion */}
+              <div className="mb-6">
+                <h3 className="font-semibold text-lg flex items-center gap-2 mb-2"><FileText className="h-5 w-5 text-indigo-400" />Conclusion</h3>
+                <div className="prose prose-sm max-w-none bg-white rounded p-4 border">
+                  <ReactMarkdown>{selectedTutorial.conclusion}</ReactMarkdown>
+                </div>
+              </div>
+              {/* Images & Diagrams */}
+              {(selectedTutorial.images?.length > 0 || selectedTutorial.diagrams?.length > 0) && (
+                <div className="mb-6">
+                  <h3 className="font-semibold text-lg flex items-center gap-2 mb-2"><Image className="h-5 w-5 text-indigo-400" />Images & Diagrams</h3>
+                  <div className="flex flex-wrap gap-4">
+                    {(selectedTutorial.images || []).map((img, i) => (
+                      <img key={i} src={img.url} alt={img.alt} className="w-24 h-24 object-cover rounded shadow border bg-white" />
+                    ))}
+                    {(selectedTutorial.diagrams || []).map((img, i) => (
+                      <img key={i} src={img.url} alt={img.alt} className="w-24 h-24 object-cover rounded shadow border bg-white" />
+                    ))}
+                  </div>
+                </div>
               )}
-            </div>
-            <div className="mb-2 text-xs text-gray-500">
-              Reading Level: {selectedTutorial.readingLevel}
-            </div>
-            <div className="mb-2 text-xs text-gray-500">
-              Estimated Read Time: {selectedTutorial.estimatedReadTime} min
-            </div>
-            <div className="mb-2 text-xs text-gray-500">
-              Meta Description: {selectedTutorial.metaDescription}
-            </div>
-            <div className="mb-2 text-xs text-gray-500">
-              Prerequisites: {(selectedTutorial.prerequisites || []).join(', ')}
-            </div>
-            <div className="mb-4">
-              <strong>Images:</strong>
-              <div className="flex flex-wrap gap-2 mt-1">
-                {(selectedTutorial.images || []).map((img, i) => (
-                  <img key={i} src={img.url} alt={img.alt} className="w-16 h-16 object-cover rounded" />
-                ))}
+              {/* Downloadable Assets */}
+              {selectedTutorial.downloadableAssets?.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="font-semibold text-lg flex items-center gap-2 mb-2"><FileText className="h-5 w-5 text-indigo-400" />Downloadable Assets</h3>
+                  <ul className="flex flex-wrap gap-4 mt-2">
+                    {selectedTutorial.downloadableAssets.map((asset, i) => (
+                      <li key={i} className="flex items-center gap-2 bg-white border rounded px-3 py-2 shadow text-xs">
+                        <a href={asset.url} target="_blank" rel="noopener noreferrer" className="underline font-medium">{asset.name}</a>
+                        <span className="text-gray-400">({asset.type})</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {/* Code Snippets */}
+              {selectedTutorial.codeSnippets?.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="font-semibold text-lg flex items-center gap-2 mb-2"><FileCode className="h-5 w-5 text-indigo-400" />Code Snippets</h3>
+                  <ul className="flex flex-wrap gap-4 mt-2">
+                    {selectedTutorial.codeSnippets.map((snip, i) => (
+                      <li key={i} className="flex items-center gap-2 bg-white border rounded px-3 py-2 shadow text-xs">
+                        <a href={snip.url} target="_blank" rel="noopener noreferrer" className="underline font-medium">{snip.name}</a>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {/* Meta & Prerequisites */}
+              <div className="mb-2 text-xs text-gray-500 flex flex-wrap gap-4">
+                <span>Meta Description: <span className="text-gray-700">{selectedTutorial.metaDescription}</span></span>
+                <span>Prerequisites: <span className="text-gray-700">{(selectedTutorial.prerequisites || []).join(', ')}</span></span>
+              </div>
+              <div className="flex justify-end mt-8">
+                <Button onClick={() => setViewId(null)} className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded shadow">
+                  Close
+                </Button>
               </div>
             </div>
-            <div className="mb-4">
-              <strong>Diagrams:</strong>
-              <div className="flex flex-wrap gap-2 mt-1">
-                {(selectedTutorial.diagrams || []).map((img, i) => (
-                  <img key={i} src={img.url} alt={img.alt} className="w-16 h-16 object-cover rounded" />
-                ))}
-              </div>
-            </div>
-            <div className="mb-4">
-              <strong>Downloadable Assets:</strong>
-              <ul className="mt-1 text-xs">
-                {(selectedTutorial.downloadableAssets || []).map((asset, i) => (
-                  <li key={i}><a href={asset.url} target="_blank" rel="noopener noreferrer" className="underline">{asset.name}</a></li>
-                ))}
-              </ul>
-            </div>
-            <div className="mb-4">
-              <strong>Code Snippets:</strong>
-              <ul className="mt-1 text-xs">
-                {(selectedTutorial.codeSnippets || []).map((snip, i) => (
-                  <li key={i}><a href={snip.url} target="_blank" rel="noopener noreferrer" className="underline">{snip.name}</a></li>
-                ))}
-              </ul>
-            </div>
-            <Button onClick={() => setViewId(null)} className="mt-4">
-              Close
-            </Button>
           </div>
         </div>
       )}

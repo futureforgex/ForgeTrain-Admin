@@ -17,10 +17,14 @@ import ProjectTasks from './pages/admin/ProjectTasks';
 import ModulePage from './pages/admin/ModulePage';
 import LoginPage from "@/pages/admin/LoginPage";
 import RequireAuth from "@/components/auth/RequireAuth";
+import PlacementDrives from './pages/admin/PlacementDrives';
 import { createContext, useContext, useEffect, useState } from "react";
 import { auth } from "@/lib/firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
-
+import LeaderboardAdmin from './pages/admin/LeaderboardAdmin';
+import Announcements from './pages/admin/Announcements';
+import Analytics from './pages/admin/Analytics';
+import Settings from './pages/admin/Settings';
 // AuthProvider context
 export const AuthContext = createContext<{ user: User | null, loading: boolean }>({ user: null, loading: true });
 
@@ -71,6 +75,11 @@ const App = () => (
                 <Route path="text-tutorials" element={<TextTutorials />} />
                 <Route path="video-tutorials" element={<VideoTutorials />} />
                 <Route path="project-tasks" element={<ProjectTasks />} />
+                <Route path="drives" element={<PlacementDrives />} />
+                <Route path="leaderboards" element={<LeaderboardAdmin />} />
+                <Route path="announcements" element={<Announcements />} />
+                <Route path="analytics" element={<Analytics />} />
+                <Route path="settings" element={<Settings />} />
                 {/* More admin routes will be added later */}
               </Route>
               {/* Catch-all route (also protected) */}
