@@ -16,7 +16,9 @@ import {
   Library,
   Layers,
   Plus,
+  School,
 } from 'lucide-react';
+import { Tooltip } from "@/components/ui/tooltip";
 
 type NavItem = {
   name: string;
@@ -27,8 +29,8 @@ type NavItem = {
 const mainNavItems: NavItem[] = [
   { name: 'Dashboard', href: '/admin', icon: Home },
   { name: 'Users', href: '/admin/users', icon: Users },
+  { name: 'Colleges', href: '/admin/colleges', icon: School },
   { name: 'Modules', href: '/admin/modules', icon: Layers },
-  { name: 'Learning Content', href: '/admin/content', icon: BookOpen },
   { name: 'Text Tutorials', href: '/admin/text-tutorials', icon: BookOpen },
   { name: 'Video Tutorials', href: '/admin/video-tutorials', icon: Video },
   { name: 'Project Tasks', href: '/admin/project-tasks', icon: ClipboardList },
@@ -70,24 +72,28 @@ const AdminSidebar = ({ collapsed = false, onToggleCollapse }: AdminSidebarProps
             <div className="bg-primary rounded-md w-8 h-8 flex items-center justify-center text-white font-bold">FT</div>
           )}
           {!collapsed && (
-            <button 
-              onClick={onToggleCollapse} 
-              className="text-sidebar-foreground hover:bg-sidebar-accent rounded-md p-1"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="m15 18-6-6 6-6" />
-              </svg>
-            </button>
+            <Tooltip content="Collapse sidebar" side="right">
+              <button 
+                onClick={onToggleCollapse} 
+                className="text-sidebar-foreground hover:bg-sidebar-accent rounded-md p-1"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="m15 18-6-6 6-6" />
+                </svg>
+              </button>
+            </Tooltip>
           )}
           {collapsed && (
-            <button 
-              onClick={onToggleCollapse}
-              className="absolute left-16 top-5 bg-sidebar rounded-r-md border border-l-0 border-sidebar-border p-1 text-sidebar-foreground"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="m9 18 6-6-6-6" />
-              </svg>
-            </button>
+            <Tooltip content="Expand sidebar" side="right">
+              <button 
+                onClick={onToggleCollapse}
+                className="absolute left-16 top-5 bg-sidebar rounded-r-md border border-l-0 border-sidebar-border p-1 text-sidebar-foreground"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="m9 18 6-6-6-6" />
+                </svg>
+              </button>
+            </Tooltip>
           )}
         </div>
         
@@ -101,14 +107,22 @@ const AdminSidebar = ({ collapsed = false, onToggleCollapse }: AdminSidebarProps
                   <Link
                     to={item.href}
                     className={cn(
-                      "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-150",
+                      "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-all duration-150 relative group",
                       isActive 
-                        ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                        ? "bg-sidebar-accent text-sidebar-accent-foreground font-semibold shadow-sm"
                         : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
                       collapsed && "justify-center"
                     )}
+                    style={{
+                      boxShadow: isActive ? "0 2px 8px 0 rgba(0,0,0,0.04)" : undefined,
+                      fontWeight: isActive ? 600 : 500,
+                    }}
                   >
-                    <item.icon size={20} />
+                    {/* Active indicator bar */}
+                    {isActive && (
+                      <span className="absolute left-0 top-0 h-full w-1 bg-primary rounded-r-md" />
+                    )}
+                    <item.icon size={20} className={isActive ? "text-primary" : "text-muted-foreground group-hover:text-primary"} />
                     {!collapsed && <span>{item.name}</span>}
                   </Link>
                 </li>

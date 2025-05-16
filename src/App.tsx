@@ -25,6 +25,7 @@ import LeaderboardAdmin from './pages/admin/LeaderboardAdmin';
 import Announcements from './pages/admin/Announcements';
 import Analytics from './pages/admin/Analytics';
 import Settings from './pages/admin/Settings';
+import Colleges from './pages/admin/Colleges';
 // AuthProvider context
 export const AuthContext = createContext<{ user: User | null, loading: boolean }>({ user: null, loading: true });
 
@@ -80,6 +81,7 @@ const App = () => (
                 <Route path="announcements" element={<Announcements />} />
                 <Route path="analytics" element={<Analytics />} />
                 <Route path="settings" element={<Settings />} />
+                <Route path="colleges" element={<Colleges />} />
                 {/* More admin routes will be added later */}
               </Route>
               {/* Catch-all route (also protected) */}
