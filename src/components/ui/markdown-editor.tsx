@@ -10,6 +10,8 @@ interface MarkdownEditorProps {
   onChange: (value: string) => void
   placeholder?: string
   className?: string
+  name?: string
+  onPaste?: (e: React.ClipboardEvent<HTMLTextAreaElement>) => void
 }
 
 const LANGUAGES = [
@@ -37,6 +39,8 @@ export function MarkdownEditor({
   onChange,
   placeholder = "Write your content here...",
   className,
+  name,
+  onPaste,
 }: MarkdownEditorProps) {
   const textareaRef = React.useRef<HTMLTextAreaElement>(null)
   const [showCodeDialog, setShowCodeDialog] = React.useState(false)
@@ -190,6 +194,8 @@ export function MarkdownEditor({
             autoCorrect="on"
             autoCapitalize="sentences"
             style={{ background: 'inherit' }}
+            name={name}
+            onPaste={onPaste}
           />
         </div>
         {/* Draggable Divider */}
@@ -208,16 +214,19 @@ export function MarkdownEditor({
           {value.trim() ? (
             <ReactMarkdown
               components={{
-                code({ node, inline, className, children, ...props }) {
+                code(props) {
+                  const { node, className, children, ...rest } = props;
+                  // @ts-ignore: inline is present at runtime
+                  const inline = (props as any).inline;
                   const match = /language-(\w+)/.exec(className || '')
                   return !inline && match ? (
                     <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto text-sm">
-                      <code className={`language-${match[1]}`} {...props}>
+                      <code className={`language-${match[1]}`} {...rest}>
                         {String(children).replace(/\n$/, '')}
                       </code>
                     </pre>
                   ) : (
-                    <code className="bg-gray-100 px-1 py-0.5 rounded text-sm" {...props}>
+                    <code className="bg-gray-100 px-1 py-0.5 rounded text-sm" {...rest}>
                       {children}
                     </code>
                   )

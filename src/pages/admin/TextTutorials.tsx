@@ -22,6 +22,7 @@ import { MarkdownEditor } from '@/components/ui/markdown-editor';
 import { FileUploader } from '@/components/ui/file-uploader';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import ReactMarkdown from 'react-markdown';
+import TurndownService from 'turndown';
 
 interface Tutorial {
   id: string;
@@ -238,6 +239,8 @@ export default function TextTutorials() {
   ]);
   const [newCategory, setNewCategory] = useState('');
   const [addingCategory, setAddingCategory] = useState(false);
+
+  const turndownService = new TurndownService();
 
   // Modify the useEffect for auto-save to include local storage
   useEffect(() => {
@@ -515,21 +518,23 @@ export default function TextTutorials() {
   // Add this function to handle paste events in the markdown editor
   const handlePaste = (e: React.ClipboardEvent) => {
     e.preventDefault();
-    const text = e.clipboardData.getData('text/plain');
-    
-    // Format the pasted text to preserve markdown formatting
-    const formattedText = text
-      .replace(/\n\n/g, '\n\n') // Preserve double line breaks
-      .replace(/\n/g, ' ') // Replace single line breaks with spaces
-      .replace(/\s+/g, ' ') // Normalize spaces
-      .trim();
+    const html = e.clipboardData.getData('text/html');
+    let text = e.clipboardData.getData('text/plain');
+
+    // Always use Turndown if HTML is present and not trivial
+    if (html && html !== '<meta charset="utf-8">' && html.trim() !== '') {
+      const markdown = turndownService.turndown(html);
+      if (markdown && markdown.trim() !== '') {
+        text = markdown;
+      }
+    }
 
     // Insert the formatted text at cursor position
     const target = e.target as HTMLTextAreaElement;
     const start = target.selectionStart;
     const end = target.selectionEnd;
-    const newValue = target.value.substring(0, start) + formattedText + target.value.substring(end);
-    
+    const newValue = target.value.substring(0, start) + text + target.value.substring(end);
+
     // Update the current tutorial state
     const field = target.name;
     setCurrentTutorial(prev => ({
@@ -686,7 +691,7 @@ export default function TextTutorials() {
 
   // Modify the renderMarkdownEditor function
   const renderMarkdownEditor = (field: keyof Tutorial, placeholder: string) => (
-    <div className="border rounded-lg overflow-hidden">
+    <div className="border rounded-lg overflow-hidden bg-white shadow mb-6">
       <EditorToolbar 
         onFormat={(format) => handleFormat(field, format)}
         onSpacing={(spacing) => handleSpacing(field, spacing)}
@@ -696,8 +701,11 @@ export default function TextTutorials() {
       />
       <div className="relative">
         <MarkdownEditor
+          key={field}
+          name={field}
           value={currentTutorial[field] as string}
           onChange={(value) => handleMarkdownChange(field, value)}
+          onPaste={handlePaste}
           placeholder={placeholder}
           className="min-h-[200px] p-4"
         />
@@ -835,19 +843,8 @@ export default function TextTutorials() {
                       placeholder="auto-generated from title"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="introduction" className="font-semibold">Introduction</Label>
-                    <div className="text-xs text-muted-foreground mb-1">Short lead-in paragraph for the lesson.</div>
-                    {renderMarkdownEditor('introduction', 'Enter a short lead-in paragraph...')}
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="body" className="font-semibold">Body <span className="text-red-500">*</span></Label>
-                    <div className="text-xs text-muted-foreground mb-1">Main content. Supports Markdown, code blocks, and LaTeX.</div>
+                  <div className="space-y-6">
                     {renderMarkdownEditor('body', 'Enter the main content...')}
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="conclusion" className="font-semibold">Conclusion / Summary</Label>
-                    <div className="text-xs text-muted-foreground mb-1">Key takeaways or next steps.</div>
                     {renderMarkdownEditor('conclusion', 'Enter key takeaways and next steps...')}
                   </div>
                   <div className="space-y-2">
