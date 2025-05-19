@@ -3,7 +3,12 @@ import { firestore, storage } from '@/lib/firebase';
 import { collection, getDocs, deleteDoc, doc, updateDoc, addDoc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Edit, Trash2, Eye, Plus, Save, Clock, Image, FileText, Settings, FileCode } from 'lucide-react';
+import { Edit, Trash2, Eye, Plus, Save, Clock, Image, FileText, Settings, FileCode, 
+  Bold, Italic, List, ListOrdered, Heading1, Heading2, Heading3, 
+  AlignLeft, AlignCenter, AlignRight, Space, Code, Quote, 
+  Table, Link, Image as ImageIcon, CheckSquare, Minus, 
+  ChevronDown, ChevronUp, Indent, Outdent, Strikethrough, 
+  Underline, Highlighter, Palette } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -47,6 +52,153 @@ function isFirestoreTimestamp(obj: any): obj is { seconds: number } {
   return obj && typeof obj === 'object' && typeof obj.seconds === 'number';
 }
 
+// Add this constant for local storage key
+const DRAFT_TUTORIAL_KEY = 'draft_tutorial_data';
+
+// Add this interface for editor toolbar
+interface EditorToolbarProps {
+  onFormat: (format: string) => void;
+  onSpacing: (spacing: number) => void;
+  onLineHeight: (height: number) => void;
+  onColor: (color: string) => void;
+  onInsert: (type: string) => void;
+}
+
+const EditorToolbar: React.FC<EditorToolbarProps> = ({ 
+  onFormat, 
+  onSpacing, 
+  onLineHeight,
+  onColor,
+  onInsert 
+}) => {
+  return (
+    <div className="flex flex-wrap gap-2 p-2 bg-gray-50 border-b rounded-t">
+      {/* Text Formatting */}
+      <div className="flex gap-1 border-r pr-2">
+        <Button size="sm" variant="ghost" onClick={() => onFormat('bold')} title="Bold">
+          <Bold className="h-4 w-4" />
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => onFormat('italic')} title="Italic">
+          <Italic className="h-4 w-4" />
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => onFormat('underline')} title="Underline">
+          <Underline className="h-4 w-4" />
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => onFormat('strikethrough')} title="Strikethrough">
+          <Strikethrough className="h-4 w-4" />
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => onFormat('highlight')} title="Highlight">
+          <Highlighter className="h-4 w-4" />
+        </Button>
+      </div>
+
+      {/* Headings */}
+      <div className="flex gap-1 border-r pr-2">
+        <Button size="sm" variant="ghost" onClick={() => onFormat('h1')} title="Heading 1">
+          <Heading1 className="h-4 w-4" />
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => onFormat('h2')} title="Heading 2">
+          <Heading2 className="h-4 w-4" />
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => onFormat('h3')} title="Heading 3">
+          <Heading3 className="h-4 w-4" />
+        </Button>
+      </div>
+
+      {/* Lists and Indentation */}
+      <div className="flex gap-1 border-r pr-2">
+        <Button size="sm" variant="ghost" onClick={() => onFormat('ul')} title="Bullet List">
+          <List className="h-4 w-4" />
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => onFormat('ol')} title="Numbered List">
+          <ListOrdered className="h-4 w-4" />
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => onFormat('checklist')} title="Checklist">
+          <CheckSquare className="h-4 w-4" />
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => onFormat('indent')} title="Indent">
+          <Indent className="h-4 w-4" />
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => onFormat('outdent')} title="Outdent">
+          <Outdent className="h-4 w-4" />
+        </Button>
+      </div>
+
+      {/* Alignment and Spacing */}
+      <div className="flex gap-1 border-r pr-2">
+        <Button size="sm" variant="ghost" onClick={() => onFormat('align-left')} title="Align Left">
+          <AlignLeft className="h-4 w-4" />
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => onFormat('align-center')} title="Align Center">
+          <AlignCenter className="h-4 w-4" />
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => onFormat('align-right')} title="Align Right">
+          <AlignRight className="h-4 w-4" />
+        </Button>
+        <div className="flex items-center gap-1">
+          <Space className="h-4 w-4 text-gray-500" />
+          <select 
+            className="text-sm border rounded px-2 py-1"
+            onChange={(e) => onSpacing(Number(e.target.value))}
+          >
+            <option value="1">Single Space</option>
+            <option value="2">Double Space</option>
+            <option value="3">Triple Space</option>
+          </select>
+        </div>
+        <div className="flex items-center gap-1">
+          <ChevronUp className="h-4 w-4 text-gray-500" />
+          <select 
+            className="text-sm border rounded px-2 py-1"
+            onChange={(e) => onLineHeight(Number(e.target.value))}
+          >
+            <option value="1">1.0</option>
+            <option value="1.5">1.5</option>
+            <option value="2">2.0</option>
+            <option value="2.5">2.5</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Special Formatting */}
+      <div className="flex gap-1 border-r pr-2">
+        <Button size="sm" variant="ghost" onClick={() => onFormat('code')} title="Code">
+          <Code className="h-4 w-4" />
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => onFormat('quote')} title="Quote">
+          <Quote className="h-4 w-4" />
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => onFormat('horizontal-rule')} title="Horizontal Rule">
+          <Minus className="h-4 w-4" />
+        </Button>
+      </div>
+
+      {/* Insert Options */}
+      <div className="flex gap-1 border-r pr-2">
+        <Button size="sm" variant="ghost" onClick={() => onInsert('link')} title="Insert Link">
+          <Link className="h-4 w-4" />
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => onInsert('image')} title="Insert Image">
+          <ImageIcon className="h-4 w-4" />
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => onInsert('table')} title="Insert Table">
+          <Table className="h-4 w-4" />
+        </Button>
+      </div>
+
+      {/* Color Options */}
+      <div className="flex items-center gap-1">
+        <Palette className="h-4 w-4 text-gray-500" />
+        <input 
+          type="color" 
+          className="w-8 h-8 p-0 border-0"
+          onChange={(e) => onColor(e.target.value)}
+        />
+      </div>
+    </div>
+  );
+};
+
 export default function TextTutorials() {
   const [tutorials, setTutorials] = useState<Tutorial[]>([]);
   const [loading, setLoading] = useState(true);
@@ -87,14 +239,14 @@ export default function TextTutorials() {
   const [newCategory, setNewCategory] = useState('');
   const [addingCategory, setAddingCategory] = useState(false);
 
-  // Auto-save functionality
+  // Modify the useEffect for auto-save to include local storage
   useEffect(() => {
-    if (!isAddModalOpen || !currentTutorial.title) return;
+    if (!isAddModalOpen) return;
 
     const autoSaveTimer = setInterval(async () => {
       try {
         setAutoSaveStatus('saving');
-        // Implement auto-save logic here
+        saveDraftToLocalStorage(currentTutorial);
         setAutoSaveStatus('saved');
       } catch (err) {
         setAutoSaveStatus('error');
@@ -153,6 +305,83 @@ export default function TextTutorials() {
     return true;
   };
 
+  // Add this function to save draft to local storage
+  const saveDraftToLocalStorage = (tutorial: Partial<Tutorial>) => {
+    try {
+      if (tutorial.title || tutorial.body) {
+        localStorage.setItem(DRAFT_TUTORIAL_KEY, JSON.stringify({
+          ...tutorial,
+          lastSaved: new Date().toISOString()
+        }));
+      }
+    } catch (err) {
+      console.error('Failed to save draft to local storage:', err);
+    }
+  };
+
+  // Add this function to load draft from local storage
+  const loadDraftFromLocalStorage = (): Partial<Tutorial> | null => {
+    try {
+      const saved = localStorage.getItem(DRAFT_TUTORIAL_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Remove the lastSaved field when loading
+        const { lastSaved, ...tutorial } = parsed;
+        return tutorial;
+      }
+      return null;
+    } catch (err) {
+      console.error('Failed to load draft from local storage:', err);
+      return null;
+    }
+  };
+
+  // Modify the handleFormClose function
+  const handleFormClose = () => {
+    if (currentTutorial.title || currentTutorial.body) {
+      saveDraftToLocalStorage(currentTutorial);
+      toast({
+        title: 'Draft Saved',
+        description: 'Your changes have been saved as a draft',
+      });
+    }
+    setIsAddModalOpen(false);
+  };
+
+  // Modify the handleAddTutorial function
+  const handleAddTutorial = () => {
+    const savedDraft = loadDraftFromLocalStorage();
+    if (savedDraft) {
+      toast({
+        title: 'Draft Loaded',
+        description: 'Your previous draft has been loaded',
+      });
+    }
+    setCurrentTutorial(savedDraft || {
+      title: '',
+      slug: '',
+      introduction: '',
+      body: '',
+      conclusion: '',
+      estimatedReadTime: 0,
+      images: [],
+      diagrams: [],
+      videos: [],
+      downloadableAssets: [],
+      codeSnippets: [],
+      tags: [],
+      category: '',
+      prerequisites: [],
+      status: 'draft',
+      metaDescription: '',
+      readingLevel: 'easy',
+    });
+    setEditId(null);
+    setActiveTab('content');
+    setIsAddModalOpen(true);
+  };
+
+  // Modify the handleSave function
   const handleSave = async () => {
     if (!validateForm()) return;
     try {
@@ -176,6 +405,7 @@ export default function TextTutorials() {
           description: 'Tutorial created successfully',
         });
       }
+      localStorage.removeItem(DRAFT_TUTORIAL_KEY);
       setIsAddModalOpen(false);
       setEditId(null);
       fetchTutorials();
@@ -188,6 +418,7 @@ export default function TextTutorials() {
     }
   };
 
+  // Modify the handlePublish function
   const handlePublish = async () => {
     if (!validateForm()) return;
     try {
@@ -204,6 +435,7 @@ export default function TextTutorials() {
         await addDoc(collection(firestore, 'tutorials'), tutorialData);
       }
 
+      localStorage.removeItem(DRAFT_TUTORIAL_KEY);
       toast({
         title: 'Success',
         description: 'Tutorial published successfully',
@@ -218,6 +450,19 @@ export default function TextTutorials() {
         variant: 'destructive',
       });
     }
+  };
+
+  // Add this function to handle text changes in the markdown editor
+  const handleMarkdownChange = (field: keyof Tutorial, value: string) => {
+    setCurrentTutorial(prev => ({
+      ...prev,
+      [field]: value
+    }));
+    // Auto-save on change
+    saveDraftToLocalStorage({
+      ...currentTutorial,
+      [field]: value
+    });
   };
 
   const fetchTutorials = async () => {
@@ -267,35 +512,205 @@ export default function TextTutorials() {
     return await getDownloadURL(fileRef);
   }
 
+  // Add this function to handle paste events in the markdown editor
+  const handlePaste = (e: React.ClipboardEvent) => {
+    e.preventDefault();
+    const text = e.clipboardData.getData('text/plain');
+    
+    // Format the pasted text to preserve markdown formatting
+    const formattedText = text
+      .replace(/\n\n/g, '\n\n') // Preserve double line breaks
+      .replace(/\n/g, ' ') // Replace single line breaks with spaces
+      .replace(/\s+/g, ' ') // Normalize spaces
+      .trim();
+
+    // Insert the formatted text at cursor position
+    const target = e.target as HTMLTextAreaElement;
+    const start = target.selectionStart;
+    const end = target.selectionEnd;
+    const newValue = target.value.substring(0, start) + formattedText + target.value.substring(end);
+    
+    // Update the current tutorial state
+    const field = target.name;
+    setCurrentTutorial(prev => ({
+      ...prev,
+      [field]: newValue
+    }));
+  };
+
+  // Add this function to handle formatting
+  const handleFormat = (field: keyof Tutorial, format: string) => {
+    const textarea = document.querySelector(`textarea[name="${field}"]`) as HTMLTextAreaElement;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selectedText = textarea.value.substring(start, end);
+    let formattedText = '';
+
+    switch (format) {
+      case 'bold':
+        formattedText = `**${selectedText}**`;
+        break;
+      case 'italic':
+        formattedText = `*${selectedText}*`;
+        break;
+      case 'code':
+        formattedText = `\`${selectedText}\``;
+        break;
+      case 'quote':
+        formattedText = `> ${selectedText}`;
+        break;
+      case 'h1':
+        formattedText = `# ${selectedText}`;
+        break;
+      case 'h2':
+        formattedText = `## ${selectedText}`;
+        break;
+      case 'h3':
+        formattedText = `### ${selectedText}`;
+        break;
+      case 'ul':
+        formattedText = selectedText.split('\n').map(line => `- ${line}`).join('\n');
+        break;
+      case 'ol':
+        formattedText = selectedText.split('\n').map((line, i) => `${i + 1}. ${line}`).join('\n');
+        break;
+      case 'align-left':
+        formattedText = `<div style="text-align: left">${selectedText}</div>`;
+        break;
+      case 'align-center':
+        formattedText = `<div style="text-align: center">${selectedText}</div>`;
+        break;
+      case 'align-right':
+        formattedText = `<div style="text-align: right">${selectedText}</div>`;
+        break;
+      case 'underline':
+        formattedText = `<u>${selectedText}</u>`;
+        break;
+      case 'strikethrough':
+        formattedText = `~~${selectedText}~~`;
+        break;
+      case 'highlight':
+        formattedText = `<mark>${selectedText}</mark>`;
+        break;
+      case 'checklist':
+        formattedText = selectedText.split('\n').map(line => `- [ ] ${line}`).join('\n');
+        break;
+      case 'indent':
+        formattedText = selectedText.split('\n').map(line => `    ${line}`).join('\n');
+        break;
+      case 'outdent':
+        formattedText = selectedText.split('\n').map(line => line.replace(/^    /, '')).join('\n');
+        break;
+      case 'horizontal-rule':
+        formattedText = '\n---\n';
+        break;
+      default:
+        formattedText = selectedText;
+    }
+
+    const newValue = textarea.value.substring(0, start) + formattedText + textarea.value.substring(end);
+    handleMarkdownChange(field, newValue);
+  };
+
+  // Add this function to handle spacing
+  const handleSpacing = (field: keyof Tutorial, spacing: number) => {
+    const textarea = document.querySelector(`textarea[name="${field}"]`) as HTMLTextAreaElement;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selectedText = textarea.value.substring(start, end);
+    const lines = selectedText.split('\n');
+    const spacedLines = lines.map(line => line + '\n'.repeat(spacing - 1));
+    const formattedText = spacedLines.join('\n');
+
+    const newValue = textarea.value.substring(0, start) + formattedText + textarea.value.substring(end);
+    handleMarkdownChange(field, newValue);
+  };
+
+  // Add this function to handle line height
+  const handleLineHeight = (field: keyof Tutorial, height: number) => {
+    const textarea = document.querySelector(`textarea[name="${field}"]`) as HTMLTextAreaElement;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selectedText = textarea.value.substring(start, end);
+    const formattedText = `<div style="line-height: ${height}">${selectedText}</div>`;
+
+    const newValue = textarea.value.substring(0, start) + formattedText + textarea.value.substring(end);
+    handleMarkdownChange(field, newValue);
+  };
+
+  // Add this function to handle color
+  const handleColor = (field: keyof Tutorial, color: string) => {
+    const textarea = document.querySelector(`textarea[name="${field}"]`) as HTMLTextAreaElement;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selectedText = textarea.value.substring(start, end);
+    const formattedText = `<span style="color: ${color}">${selectedText}</span>`;
+
+    const newValue = textarea.value.substring(0, start) + formattedText + textarea.value.substring(end);
+    handleMarkdownChange(field, newValue);
+  };
+
+  // Add this function to handle insertions
+  const handleInsert = (field: keyof Tutorial, type: string) => {
+    const textarea = document.querySelector(`textarea[name="${field}"]`) as HTMLTextAreaElement;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    let insertText = '';
+
+    switch (type) {
+      case 'link':
+        insertText = '[Link Text](url)';
+        break;
+      case 'image':
+        insertText = '![Alt Text](image-url)';
+        break;
+      case 'table':
+        insertText = `| Header 1 | Header 2 |\n|----------|----------|\n| Cell 1   | Cell 2   |`;
+        break;
+      default:
+        return;
+    }
+
+    const newValue = textarea.value.substring(0, start) + insertText + textarea.value.substring(start);
+    handleMarkdownChange(field, newValue);
+  };
+
+  // Modify the renderMarkdownEditor function
+  const renderMarkdownEditor = (field: keyof Tutorial, placeholder: string) => (
+    <div className="border rounded-lg overflow-hidden">
+      <EditorToolbar 
+        onFormat={(format) => handleFormat(field, format)}
+        onSpacing={(spacing) => handleSpacing(field, spacing)}
+        onLineHeight={(height) => handleLineHeight(field, height)}
+        onColor={(color) => handleColor(field, color)}
+        onInsert={(type) => handleInsert(field, type)}
+      />
+      <div className="relative">
+        <MarkdownEditor
+          value={currentTutorial[field] as string}
+          onChange={(value) => handleMarkdownChange(field, value)}
+          placeholder={placeholder}
+          className="min-h-[200px] p-4"
+        />
+      </div>
+    </div>
+  );
+
   return (
     <div className="container mx-auto p-6">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">Text Tutorials</h1>
         <Button
-          onClick={() => {
-            setCurrentTutorial({
-              title: '',
-              slug: '',
-              introduction: '',
-              body: '',
-              conclusion: '',
-              estimatedReadTime: 0,
-              images: [],
-              diagrams: [],
-              videos: [],
-              downloadableAssets: [],
-              codeSnippets: [],
-              tags: [],
-              category: '',
-              prerequisites: [],
-              status: 'draft',
-              metaDescription: '',
-              readingLevel: 'easy',
-            });
-            setEditId(null);
-            setActiveTab('content');
-            setIsAddModalOpen(true);
-          }}
+          onClick={handleAddTutorial}
         >
           <Plus className="w-4 h-4 mr-2" />
           Add Tutorial
@@ -370,7 +785,7 @@ export default function TextTutorials() {
                   {autoSaveStatus === 'error' && 'Error saving changes'}
                 </div>
               </div>
-              <Button variant="ghost" onClick={() => setIsAddModalOpen(false)}>×</Button>
+              <Button variant="ghost" onClick={handleFormClose}>×</Button>
             </div>
 
             <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1">
@@ -423,32 +838,17 @@ export default function TextTutorials() {
                   <div className="space-y-2">
                     <Label htmlFor="introduction" className="font-semibold">Introduction</Label>
                     <div className="text-xs text-muted-foreground mb-1">Short lead-in paragraph for the lesson.</div>
-                    <MarkdownEditor
-                      value={currentTutorial.introduction}
-                      onChange={(value) => setCurrentTutorial({ ...currentTutorial, introduction: value })}
-                      placeholder="Enter a short lead-in paragraph..."
-                    />
+                    {renderMarkdownEditor('introduction', 'Enter a short lead-in paragraph...')}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="body" className="font-semibold">Body <span className="text-red-500">*</span></Label>
                     <div className="text-xs text-muted-foreground mb-1">Main content. Supports Markdown, code blocks, and LaTeX.</div>
-                    <MarkdownEditor
-                      value={currentTutorial.body}
-                      onChange={(value) => setCurrentTutorial({ ...currentTutorial, body: value })}
-                      placeholder="Enter the main content..."
-                    />
-                    {currentTutorial.body && currentTutorial.body.split(/\s+/).length < 100 && (
-                      <div className="text-xs text-yellow-600">Body should be at least 100 words for best results.</div>
-                    )}
+                    {renderMarkdownEditor('body', 'Enter the main content...')}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="conclusion" className="font-semibold">Conclusion / Summary</Label>
                     <div className="text-xs text-muted-foreground mb-1">Key takeaways or next steps.</div>
-                    <MarkdownEditor
-                      value={currentTutorial.conclusion}
-                      onChange={(value) => setCurrentTutorial({ ...currentTutorial, conclusion: value })}
-                      placeholder="Enter key takeaways and next steps..."
-                    />
+                    {renderMarkdownEditor('conclusion', 'Enter key takeaways and next steps...')}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="estimatedReadTime" className="font-semibold">Estimated Read Time (minutes)</Label>
@@ -686,7 +1086,7 @@ export default function TextTutorials() {
               </div>
 
               <div className="p-6 border-t flex justify-end gap-4 bg-white sticky bottom-0 z-20">
-                <Button variant="outline" onClick={() => setIsAddModalOpen(false)}>
+                <Button variant="outline" onClick={handleFormClose}>
                   Cancel
                 </Button>
                 <Button variant="outline" onClick={handleSave}>

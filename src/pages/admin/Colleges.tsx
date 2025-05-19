@@ -8,8 +8,9 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Search, Filter, ChevronLeft, ChevronRight, Plus, Edit2, Trash2, Eye } from "lucide-react";
-import { db } from "@/lib/firebase";
-import { collection, addDoc, updateDoc, doc, getDocs } from "firebase/firestore";
+import { db, storage } from "@/lib/firebase";
+import { collection, addDoc, updateDoc, doc, getDocs, deleteDoc } from "firebase/firestore";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 const INDIAN_STATES = [
   "Andhra Pradesh",
@@ -200,38 +201,53 @@ export default function Colleges() {
     fetchColleges();
   }, []);
 
-  // Add or update college
+  // Add this function to handle logo upload
+  const handleLogoUpload = async (file: File) => {
+    try {
+      const storageRef = ref(storage, `college-logos/${Date.now()}_${file.name}`);
+      await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(storageRef);
+      setForm(f => ({ ...f, logo: downloadURL }));
+    } catch (error) {
+      console.error("Error uploading logo:", error);
+      alert("Failed to upload logo. Please try again.");
+    }
+  };
+
+  // Modify the handleSaveCollege function
   async function handleSaveCollege() {
     try {
       if (editing) {
         // Update in Firestore
-        const { id, ...rest } = form;
+        const { id, ...updateData } = form;
         // Remove all undefined fields
-        const updateData = Object.fromEntries(
-          Object.entries(rest).filter(([_, v]) => v !== undefined)
+        const cleanData = Object.fromEntries(
+          Object.entries(updateData).filter(([_, v]) => v !== undefined)
         );
-        await updateDoc(doc(db, "colleges", editing.id), updateData);
-        // Re-fetch colleges to get the latest data
-        const snapshot = await getDocs(collection(db, "colleges"));
-        const data = snapshot.docs.map(docSnap => {
-          const d = docSnap.data();
-          return {
-            id: docSnap.id,
-            ...d,
-          } as College;
-        });
-        setColleges(data);
+        
+        // Update the document
+        await updateDoc(doc(db, "colleges", editing.id), cleanData);
+        
+        // Update local state
+        setColleges(cols => 
+          cols.map(c => c.id === editing.id ? { ...c, ...cleanData } : c)
+        );
+        
+        alert("College updated successfully!");
       } else {
         // Add to Firestore
-        const docRef = await addDoc(collection(db, "colleges"), form as College);
+        const docRef = await addDoc(collection(db, "colleges"), form);
         setColleges(cols => [
           ...cols,
           { ...form, id: docRef.id } as College,
         ]);
+        alert("College added successfully!");
       }
     } catch (e) {
       alert("Error saving college: " + (e as Error).message);
+      return;
     }
+    
     setShowForm(false);
     setEditing(null);
     setViewing(null);
@@ -259,8 +275,19 @@ export default function Colleges() {
   }
 
   // Delete college
-  function handleDeleteCollege(id: string) {
-    setColleges(cols => cols.filter(c => c.id !== id));
+  async function handleDeleteCollege(id: string) {
+    if (window.confirm("Are you sure you want to delete this college? This action cannot be undone.")) {
+      try {
+        // Delete from Firestore
+        await deleteDoc(doc(db, "colleges", id));
+        // Update local state
+        setColleges(cols => cols.filter(c => c.id !== id));
+        alert("College deleted successfully!");
+      } catch (error) {
+        console.error("Error deleting college:", error);
+        alert("Failed to delete college. Please try again.");
+      }
+    }
   }
 
   // Archive college
@@ -350,7 +377,7 @@ export default function Colleges() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>ID</TableHead>
+              <TableHead>No.</TableHead>
               <TableHead>College Name</TableHead>
               <TableHead>City</TableHead>
               <TableHead>State</TableHead>
@@ -360,9 +387,9 @@ export default function Colleges() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {paginatedColleges.map(college => (
+            {paginatedColleges.map((college, index) => (
               <TableRow key={college.id}>
-                <TableCell>{college.id}</TableCell>
+                <TableCell>{(currentPage - 1) * itemsPerPage + index + 1}</TableCell>
                 <TableCell>{college.name}</TableCell>
                 <TableCell>{college.address.city}</TableCell>
                 <TableCell>{college.address.state}</TableCell>
@@ -382,6 +409,13 @@ export default function Colleges() {
                       onClick={() => handleArchiveCollege(college.id)}
                     >
                       {college.status === "Active" ? "Archive" : "Restore"}
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="destructive" 
+                      onClick={() => handleDeleteCollege(college.id)}
+                    >
+                      Delete
                     </Button>
                   </div>
                 </TableCell>
@@ -482,14 +516,26 @@ export default function Colleges() {
                 </div>
                 <div>
                   <Label>Logo</Label>
-                  <Input
-                    type="file"
-                    accept="image/*"
-                    onChange={e => {
-                      // Handle file upload
-                    }}
-                    disabled={!!viewing}
-                  />
+                  <div className="flex items-center gap-4">
+                    {form.logo && (
+                      <img 
+                        src={form.logo} 
+                        alt="College logo" 
+                        className="w-16 h-16 object-contain border rounded"
+                      />
+                    )}
+                    <Input
+                      type="file"
+                      accept="image/*"
+                      onChange={e => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          handleLogoUpload(file);
+                        }
+                      }}
+                      disabled={!!viewing}
+                    />
+                  </div>
                 </div>
               </TabsContent>
               <TabsContent value="address" className="space-y-6 mt-4">
