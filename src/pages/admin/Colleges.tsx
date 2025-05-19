@@ -274,6 +274,14 @@ export default function Colleges() {
     setShowForm(true);
   }
 
+  // View college
+  function handleViewCollege(college: College) {
+    setViewing(college);
+    setEditing(null);
+    setForm(college);
+    setShowForm(true);
+  }
+
   // Delete college
   async function handleDeleteCollege(id: string) {
     if (window.confirm("Are you sure you want to delete this college? This action cannot be undone.")) {
@@ -402,7 +410,7 @@ export default function Colleges() {
                 <TableCell>
                   <div className="flex gap-2">
                     <Button size="sm" variant="outline" onClick={() => handleEditCollege(college)}>Edit</Button>
-                    <Button size="sm" variant="outline" onClick={() => { setViewing(college); setShowForm(true); }}>View</Button>
+                    <Button size="sm" variant="outline" onClick={() => handleViewCollege(college)}>View</Button>
                     <Button 
                       size="sm" 
                       variant="outline" 
@@ -474,7 +482,7 @@ export default function Colleges() {
                     value={form.name}
                     onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                     placeholder="Enter college name"
-                    readOnly={!!viewing}
+                    disabled={!!viewing}
                   />
                 </div>
                 <div>
@@ -483,7 +491,7 @@ export default function Colleges() {
                     value={form.code}
                     onChange={e => setForm(f => ({ ...f, code: e.target.value }))}
                     placeholder="e.g. IITB"
-                    readOnly={!!viewing}
+                    disabled={!!viewing}
                   />
                 </div>
                 <div>
@@ -511,7 +519,7 @@ export default function Colleges() {
                     value={form.website}
                     onChange={e => setForm(f => ({ ...f, website: e.target.value }))}
                     placeholder="https://"
-                    readOnly={!!viewing}
+                    disabled={!!viewing}
                   />
                 </div>
                 <div>
@@ -545,7 +553,7 @@ export default function Colleges() {
                   <Input
                     value={form.address?.line1}
                     onChange={e => setForm(f => ({ ...f, address: { ...f.address!, line1: e.target.value } }))}
-                    readOnly={!!viewing}
+                    disabled={!!viewing}
                   />
                 </div>
                 <div>
@@ -553,7 +561,7 @@ export default function Colleges() {
                   <Input
                     value={form.address?.line2 || ""}
                     onChange={e => setForm(f => ({ ...f, address: { ...f.address!, line2: e.target.value } }))}
-                    readOnly={!!viewing}
+                    disabled={!!viewing}
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
@@ -562,7 +570,7 @@ export default function Colleges() {
                     <Input
                       value={form.address?.city}
                       onChange={e => setForm(f => ({ ...f, address: { ...f.address!, city: e.target.value } }))}
-                      readOnly={!!viewing}
+                      disabled={!!viewing}
                     />
                   </div>
                   <div>
@@ -590,7 +598,7 @@ export default function Colleges() {
                   <Input
                     value={form.address?.pinCode}
                     onChange={e => setForm(f => ({ ...f, address: { ...f.address!, pinCode: e.target.value } }))}
-                    readOnly={!!viewing}
+                    disabled={!!viewing}
                   />
                 </div>
                 <div>
@@ -599,7 +607,7 @@ export default function Colleges() {
                     value={form.contact?.name}
                     onChange={e => setForm(f => ({ ...f, contact: { ...f.contact!, name: e.target.value } }))}
                     placeholder="Name"
-                    readOnly={!!viewing}
+                    disabled={!!viewing}
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
@@ -609,7 +617,7 @@ export default function Colleges() {
                       value={form.contact?.email}
                       onChange={e => setForm(f => ({ ...f, contact: { ...f.contact!, email: e.target.value } }))}
                       type="email"
-                      readOnly={!!viewing}
+                      disabled={!!viewing}
                     />
                   </div>
                   <div>
@@ -617,7 +625,7 @@ export default function Colleges() {
                     <Input
                       value={form.contact?.phone}
                       onChange={e => setForm(f => ({ ...f, contact: { ...f.contact!, phone: e.target.value } }))}
-                      readOnly={!!viewing}
+                      disabled={!!viewing}
                     />
                   </div>
                 </div>
@@ -650,7 +658,7 @@ export default function Colleges() {
                     value={form.notes}
                     onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
                     placeholder="Internal remarks or partner ID"
-                    readOnly={!!viewing}
+                    disabled={!!viewing}
                   />
                 </div>
               </TabsContent>
