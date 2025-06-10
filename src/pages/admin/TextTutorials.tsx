@@ -8,7 +8,7 @@ import { Edit, Trash2, Eye, Plus, Save, Clock, Image, FileText, Settings, FileCo
   AlignLeft, AlignCenter, AlignRight, Space, Code, Quote, 
   Table, Link, Image as ImageIcon, CheckSquare, Minus, 
   ChevronDown, ChevronUp, Indent, Outdent, Strikethrough, 
-  Underline, Highlighter, Palette } from 'lucide-react';
+  Underline, Highlighter, Palette, Users, Award, Navigation, Search, Filter, SortAsc, SortDesc, ListChecks, Eraser } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -26,26 +26,58 @@ import TurndownService from 'turndown';
 
 interface Tutorial {
   id: string;
+  tutorialId: string;
+  topicId: string;
   title: string;
-  slug: string;
-  introduction: string;
-  body: string;
-  conclusion: string;
-  estimatedReadTime: number;
-  images: { url: string; alt: string }[];
-  diagrams: { url: string; alt: string }[];
-  videos: { url: string; platform: 'youtube' | 'vimeo' }[];
-  downloadableAssets: { url: string; name: string; type: string }[];
-  codeSnippets: { url: string; name: string }[];
-  tags: string[];
-  category: string;
+  subtitle: string;
+  coverImageUrl: string;
+  altText: string;
+  estimatedTimeMins: number;
+  readingLevel: string;
+  preferredLearningStyle: string[];
+  storyContext: string;
+  learningObjectives: string[];
   prerequisites: string[];
-  status: 'draft' | 'published';
-  publishDate?: Date;
+  biteSizeSections: {
+    sectionId: string;
+    heading: string;
+    contentMd: string;
+    humorTip: string;
+    mnemonic: string;
+    codeSnippet: { language: string; code: string };
+    challengePrompt: string;
+    sectionQuiz: any[];
+    playgroundEmbedId: string;
+    autoCheckSnippet: boolean;
+  }[];
+  keyTakeaways: string[];
+  funFact: string;
+  reflectionPrompt: string;
+  discussionThreadUrl: string;
+  progressBadge: string;
+  xpPoints: number;
+  streakMultiplier: boolean;
+  milestoneBadges: string[];
+  spacedRepetitionId: string;
+  nextTutorialId: string;
+  createdAt: string;
+  updatedAt: string;
+  body: string;
   metaDescription: string;
-  readingLevel: 'easy' | 'medium' | 'hard';
-  createdAt: Date;
-  updatedAt: Date;
+  category: string;
+  tags: string[];
+  status: 'draft' | 'published';
+  publishDate?: Date | { seconds: number };
+  introduction?: string;
+  conclusion?: string;
+  images?: { url: string; alt: string }[];
+  diagrams?: { url: string; alt: string }[];
+  downloadableAssets?: { url: string; name: string; type: string }[];
+  codeSnippets?: { url: string; name: string }[];
+  slug: string;
+  estimatedReadTime: number;
+  filledSummary?: string;
+  builtInPoints?: string[];
 }
 
 // Helper for Firestore Timestamp
@@ -200,6 +232,113 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
   );
 };
 
+// Add this component at the top of the file, after the imports
+const CollapsibleSection: React.FC<{
+  title: string;
+  icon: React.ReactNode;
+  children: React.ReactNode;
+  defaultOpen?: boolean;
+}> = ({ title, icon, children, defaultOpen = true }) => {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+
+  return (
+    <div className="border rounded-lg overflow-hidden">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full px-4 py-3 bg-gray-50 hover:bg-gray-100 flex items-center justify-between"
+      >
+        <div className="flex items-center gap-2">
+          {icon}
+          <h3 className="font-medium">{title}</h3>
+        </div>
+        <ChevronDown className={`h-5 w-5 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+      {isOpen && (
+        <div className="p-4 space-y-4">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Add this component for the content editor with highlighting
+const ContentEditor: React.FC<{
+  value: string;
+  onChange: (value: string) => void;
+}> = ({ value, onChange }) => {
+  const [selection, setSelection] = useState<{ start: number; end: number } | null>(null);
+
+  const handleTextSelection = () => {
+    const textarea = document.querySelector('textarea');
+    if (textarea) {
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      setSelection({ start, end });
+    }
+  };
+
+  const applyHighlight = () => {
+    if (!selection) return;
+    
+    const before = value.substring(0, selection.start);
+    const selected = value.substring(selection.start, selection.end);
+    const after = value.substring(selection.end);
+    
+    const newValue = `${before}==${selected}==${after}`;
+    onChange(newValue);
+    setSelection(null);
+  };
+
+  const removeHighlight = () => {
+    if (!selection) return;
+    
+    const before = value.substring(0, selection.start);
+    const selected = value.substring(selection.start, selection.end);
+    const after = value.substring(selection.end);
+    
+    const newValue = `${before}${selected.replace(/==/g, '')}${after}`;
+    onChange(newValue);
+    setSelection(null);
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={applyHighlight}
+          disabled={!selection}
+        >
+          <Highlighter className="h-4 w-4 mr-2" />
+          Highlight
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={removeHighlight}
+          disabled={!selection}
+        >
+          <Eraser className="h-4 w-4 mr-2" />
+          Remove Highlight
+        </Button>
+      </div>
+      <Textarea
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        onSelect={handleTextSelection}
+        className="font-mono"
+        rows={10}
+      />
+      <div className="text-sm text-gray-500">
+        <p>Tip: Select text and use the highlight button to mark important content.</p>
+        <p>Highlighted text will be displayed with a yellow background in the tutorial.</p>
+      </div>
+    </div>
+  );
+};
+
 export default function TextTutorials() {
   const [tutorials, setTutorials] = useState<Tutorial[]>([]);
   const [loading, setLoading] = useState(true);
@@ -210,23 +349,46 @@ export default function TextTutorials() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('content');
   const [currentTutorial, setCurrentTutorial] = useState<Partial<Tutorial>>({
+    tutorialId: '',
+    topicId: '',
     title: '',
-    slug: '',
-    introduction: '',
+    subtitle: '',
+    coverImageUrl: '',
+    altText: '',
+    estimatedTimeMins: 0,
+    readingLevel: '',
+    preferredLearningStyle: [],
+    storyContext: '',
+    learningObjectives: [],
+    prerequisites: [],
+    biteSizeSections: [],
+    keyTakeaways: [],
+    funFact: '',
+    reflectionPrompt: '',
+    discussionThreadUrl: '',
+    progressBadge: '',
+    xpPoints: 0,
+    streakMultiplier: false,
+    milestoneBadges: [],
+    spacedRepetitionId: '',
+    nextTutorialId: '',
+    createdAt: '',
+    updatedAt: '',
     body: '',
+    metaDescription: '',
+    category: '',
+    tags: [],
+    status: 'draft',
+    introduction: '',
     conclusion: '',
-    estimatedReadTime: 0,
     images: [],
     diagrams: [],
-    videos: [],
     downloadableAssets: [],
     codeSnippets: [],
-    tags: [],
-    category: '',
-    prerequisites: [],
-    status: 'draft',
-    metaDescription: '',
-    readingLevel: 'easy',
+    slug: '',
+    estimatedReadTime: 0,
+    filledSummary: '',
+    builtInPoints: [],
   });
   const [autoSaveStatus, setAutoSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
   const { toast } = useToast();
@@ -241,6 +403,12 @@ export default function TextTutorials() {
   const [addingCategory, setAddingCategory] = useState(false);
 
   const turndownService = new TurndownService();
+
+  // Add these state variables in the TextTutorials component
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortField, setSortField] = useState<'title' | 'createdAt' | 'readingLevel'>('createdAt');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  const [filterLevel, setFilterLevel] = useState<string>('all');
 
   // Modify the useEffect for auto-save to include local storage
   useEffect(() => {
@@ -361,23 +529,46 @@ export default function TextTutorials() {
       });
     }
     setCurrentTutorial(savedDraft || {
+      tutorialId: '',
+      topicId: '',
       title: '',
-      slug: '',
-      introduction: '',
+      subtitle: '',
+      coverImageUrl: '',
+      altText: '',
+      estimatedTimeMins: 0,
+      readingLevel: '',
+      preferredLearningStyle: [],
+      storyContext: '',
+      learningObjectives: [],
+      prerequisites: [],
+      biteSizeSections: [],
+      keyTakeaways: [],
+      funFact: '',
+      reflectionPrompt: '',
+      discussionThreadUrl: '',
+      progressBadge: '',
+      xpPoints: 0,
+      streakMultiplier: false,
+      milestoneBadges: [],
+      spacedRepetitionId: '',
+      nextTutorialId: '',
+      createdAt: '',
+      updatedAt: '',
       body: '',
+      metaDescription: '',
+      category: '',
+      tags: [],
+      status: 'draft',
+      introduction: '',
       conclusion: '',
-      estimatedReadTime: 0,
       images: [],
       diagrams: [],
-      videos: [],
       downloadableAssets: [],
       codeSnippets: [],
-      tags: [],
-      category: '',
-      prerequisites: [],
-      status: 'draft',
-      metaDescription: '',
-      readingLevel: 'easy',
+      slug: '',
+      estimatedReadTime: 0,
+      filledSummary: '',
+      builtInPoints: [],
     });
     setEditId(null);
     setActiveTab('content');
@@ -427,8 +618,6 @@ export default function TextTutorials() {
     try {
       const tutorialData = {
         ...currentTutorial,
-        status: 'published',
-        publishDate: new Date(),
         updatedAt: new Date(),
       };
 
@@ -461,11 +650,6 @@ export default function TextTutorials() {
       ...prev,
       [field]: value
     }));
-    // Auto-save on change
-    saveDraftToLocalStorage({
-      ...currentTutorial,
-      [field]: value
-    });
   };
 
   const fetchTutorials = async () => {
@@ -703,7 +887,7 @@ export default function TextTutorials() {
         <MarkdownEditor
           key={field}
           name={field}
-          value={currentTutorial[field] as string}
+          value={String(currentTutorial[field] ?? '')}
           onChange={(value) => handleMarkdownChange(field, value)}
           onPaste={handlePaste}
           placeholder={placeholder}
@@ -713,70 +897,645 @@ export default function TextTutorials() {
     </div>
   );
 
-  return (
-    <div className="container mx-auto p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Text Tutorials</h1>
-        <Button
-          onClick={handleAddTutorial}
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Add Tutorial
-        </Button>
-      </div>
+  // Update the renderContentTab function
+  const renderContentTab = () => (
+    <div className="space-y-6">
+      <CollapsibleSection title="Basic Information" icon={<FileText className="h-5 w-5 text-blue-500" />}>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <Label>Tutorial ID</Label>
+            <Input
+              value={currentTutorial.tutorialId}
+              onChange={e => setCurrentTutorial({ ...currentTutorial, tutorialId: e.target.value })}
+              placeholder="Enter tutorial ID"
+            />
+          </div>
+          <div>
+            <Label>Topic ID</Label>
+            <Input
+              value={currentTutorial.topicId}
+              onChange={e => setCurrentTutorial({ ...currentTutorial, topicId: e.target.value })}
+              placeholder="Enter topic ID"
+            />
+          </div>
+          <div>
+            <Label>Title</Label>
+            <Input
+              value={currentTutorial.title}
+              onChange={e => setCurrentTutorial({ ...currentTutorial, title: e.target.value })}
+              placeholder="Enter tutorial title"
+            />
+          </div>
+          <div>
+            <Label>Subtitle</Label>
+            <Input
+              value={currentTutorial.subtitle}
+              onChange={e => setCurrentTutorial({ ...currentTutorial, subtitle: e.target.value })}
+              placeholder="Enter subtitle"
+            />
+          </div>
+        </div>
+      </CollapsibleSection>
 
-      {loading && <div className="text-center py-8">Loading...</div>}
-      {error && <div className="text-center text-red-500 py-8">{error}</div>}
+      <CollapsibleSection title="Media" icon={<Image className="h-5 w-5 text-green-500" />}>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <Label>Cover Image URL</Label>
+            <Input
+              value={currentTutorial.coverImageUrl}
+              onChange={e => setCurrentTutorial({ ...currentTutorial, coverImageUrl: e.target.value })}
+              placeholder="Paste image URL"
+            />
+          </div>
+          <div>
+            <Label>Alt Text</Label>
+            <Input
+              value={currentTutorial.altText}
+              onChange={e => setCurrentTutorial({ ...currentTutorial, altText: e.target.value })}
+              placeholder="Describe the image"
+            />
+          </div>
+        </div>
+      </CollapsibleSection>
 
-      {!loading && !error && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {tutorials.length === 0 ? (
-            <div className="col-span-full text-center text-gray-500">No tutorials found.</div>
-          ) : (
-            tutorials.map(tutorial => (
-              <div key={tutorial.id} className="bg-white rounded-xl shadow p-5 flex flex-col gap-2 border border-gray-100">
-                <div className="flex items-center justify-between">
-                  <h2 className="font-semibold text-lg line-clamp-2">{tutorial.title}</h2>
-                  <div className="flex gap-2">
-                    <Button size="icon" variant="ghost" onClick={() => setViewId(tutorial.id)}>
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                    <Button size="icon" variant="ghost" onClick={() => {
-                      setCurrentTutorial(tutorial);
-                      setEditId(tutorial.id);
-                      setActiveTab('content');
-                      setIsAddModalOpen(true);
-                    }}>
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => handleDelete(tutorial.id)}
-                      disabled={deletingId === tutorial.id}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
+      <CollapsibleSection title="Meta Information" icon={<Settings className="h-5 w-5 text-purple-500" />}>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div>
+            <Label>Estimated Time (minutes)</Label>
+            <Input
+              type="number"
+              value={currentTutorial.estimatedTimeMins}
+              onChange={e => setCurrentTutorial({ ...currentTutorial, estimatedTimeMins: Number(e.target.value) })}
+            />
+          </div>
+          <div>
+            <Label>Reading Level</Label>
+            <Select
+              value={currentTutorial.readingLevel}
+              onValueChange={value => setCurrentTutorial({ ...currentTutorial, readingLevel: value })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select level" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="easy">Easy</SelectItem>
+                <SelectItem value="medium">Medium</SelectItem>
+                <SelectItem value="hard">Hard</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Preferred Learning Style</Label>
+            <MultiSelect
+              value={currentTutorial.preferredLearningStyle || []}
+              onChange={arr => setCurrentTutorial({ ...currentTutorial, preferredLearningStyle: arr })}
+              placeholder="e.g. text, video"
+            />
+          </div>
+        </div>
+      </CollapsibleSection>
+
+      <CollapsibleSection title="Content" icon={<FileText className="h-5 w-5 text-orange-500" />}>
+        <div className="space-y-6">
+          <div>
+            <Label>Story Context</Label>
+            <Textarea
+              value={currentTutorial.storyContext}
+              onChange={e => setCurrentTutorial({ ...currentTutorial, storyContext: e.target.value })}
+              placeholder="Describe the story context"
+              rows={4}
+            />
+          </div>
+          <div>
+            <Label>Learning Objectives</Label>
+            <MultiSelect
+              value={currentTutorial.learningObjectives || []}
+              onChange={arr => setCurrentTutorial({ ...currentTutorial, learningObjectives: arr })}
+              placeholder="Add learning objectives"
+            />
+          </div>
+          <div>
+            <Label>Prerequisites</Label>
+            <MultiSelect
+              value={currentTutorial.prerequisites || []}
+              onChange={arr => setCurrentTutorial({ ...currentTutorial, prerequisites: arr })}
+              placeholder="Add prerequisites"
+            />
+          </div>
+        </div>
+      </CollapsibleSection>
+
+      <CollapsibleSection title="Bite Size Sections" icon={<List className="h-5 w-5 text-red-500" />}>
+        <div className="space-y-4">
+          {(currentTutorial.biteSizeSections || []).map((section, index) => (
+            <div key={section.sectionId} className="border rounded-lg p-4 space-y-4">
+              <div className="flex justify-between items-center">
+                <h4 className="font-medium">Section {index + 1}</h4>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    const newSections = [...(currentTutorial.biteSizeSections || [])];
+                    newSections.splice(index, 1);
+                    setCurrentTutorial({ ...currentTutorial, biteSizeSections: newSections });
+                  }}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label>Section ID</Label>
+                  <Input
+                    value={section.sectionId}
+                    onChange={e => {
+                      const newSections = [...(currentTutorial.biteSizeSections || [])];
+                      newSections[index] = { ...section, sectionId: e.target.value };
+                      setCurrentTutorial({ ...currentTutorial, biteSizeSections: newSections });
+                    }}
+                  />
                 </div>
-                <div className="flex flex-wrap gap-2 mb-1">
-                  <Badge variant="secondary" className="capitalize">{tutorial.category}</Badge>
-                  {tutorial.tags && tutorial.tags.map(tag => (
-                    <Badge key={tag} variant="outline" className="text-xs border-gray-300 bg-gray-100 text-gray-600">
-                      {tag}
-                    </Badge>
-                  ))}
-                </div>
-                <div className="text-xs text-gray-500">
-                  Status: <span className={tutorial.status === 'published' ? 'text-green-600' : 'text-yellow-600'}>
-                    {tutorial.status}
-                  </span>
+                <div>
+                  <Label>Heading</Label>
+                  <Input
+                    value={section.heading}
+                    onChange={e => {
+                      const newSections = [...(currentTutorial.biteSizeSections || [])];
+                      newSections[index] = { ...section, heading: e.target.value };
+                      setCurrentTutorial({ ...currentTutorial, biteSizeSections: newSections });
+                    }}
+                  />
                 </div>
               </div>
-            ))
-          )}
+              <div>
+                <Label>Content (Markdown)</Label>
+                <ContentEditor
+                  value={section.contentMd}
+                  onChange={value => {
+                    const newSections = [...(currentTutorial.biteSizeSections || [])];
+                    newSections[index] = { ...section, contentMd: value };
+                    setCurrentTutorial({ ...currentTutorial, biteSizeSections: newSections });
+                  }}
+                />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label>Humor Tip</Label>
+                  <Input
+                    value={section.humorTip}
+                    onChange={e => {
+                      const newSections = [...(currentTutorial.biteSizeSections || [])];
+                      newSections[index] = { ...section, humorTip: e.target.value };
+                      setCurrentTutorial({ ...currentTutorial, biteSizeSections: newSections });
+                    }}
+                  />
+                </div>
+                <div>
+                  <Label>Mnemonic</Label>
+                  <Input
+                    value={section.mnemonic}
+                    onChange={e => {
+                      const newSections = [...(currentTutorial.biteSizeSections || [])];
+                      newSections[index] = { ...section, mnemonic: e.target.value };
+                      setCurrentTutorial({ ...currentTutorial, biteSizeSections: newSections });
+                    }}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label>Code Language</Label>
+                  <Input
+                    value={section.codeSnippet?.language}
+                    onChange={e => {
+                      const newSections = [...(currentTutorial.biteSizeSections || [])];
+                      newSections[index] = {
+                        ...section,
+                        codeSnippet: { ...section.codeSnippet, language: e.target.value }
+                      };
+                      setCurrentTutorial({ ...currentTutorial, biteSizeSections: newSections });
+                    }}
+                  />
+                </div>
+                <div>
+                  <Label>Code</Label>
+                  <Textarea
+                    value={section.codeSnippet?.code}
+                    onChange={e => {
+                      const newSections = [...(currentTutorial.biteSizeSections || [])];
+                      newSections[index] = {
+                        ...section,
+                        codeSnippet: { ...section.codeSnippet, code: e.target.value }
+                      };
+                      setCurrentTutorial({ ...currentTutorial, biteSizeSections: newSections });
+                    }}
+                    rows={4}
+                  />
+                </div>
+              </div>
+              <div>
+                <Label>Challenge Prompt</Label>
+                <Textarea
+                  value={section.challengePrompt}
+                  onChange={e => {
+                    const newSections = [...(currentTutorial.biteSizeSections || [])];
+                    newSections[index] = { ...section, challengePrompt: e.target.value };
+                    setCurrentTutorial({ ...currentTutorial, biteSizeSections: newSections });
+                  }}
+                  rows={2}
+                />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label>Playground Embed ID</Label>
+                  <Input
+                    value={section.playgroundEmbedId}
+                    onChange={e => {
+                      const newSections = [...(currentTutorial.biteSizeSections || [])];
+                      newSections[index] = { ...section, playgroundEmbedId: e.target.value };
+                      setCurrentTutorial({ ...currentTutorial, biteSizeSections: newSections });
+                    }}
+                  />
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Label>Auto Check Snippet</Label>
+                  <Switch
+                    checked={section.autoCheckSnippet}
+                    onCheckedChange={checked => {
+                      const newSections = [...(currentTutorial.biteSizeSections || [])];
+                      newSections[index] = { ...section, autoCheckSnippet: checked };
+                      setCurrentTutorial({ ...currentTutorial, biteSizeSections: newSections });
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+          ))}
+          <Button
+            onClick={() => {
+              const newSection = {
+                sectionId: `section-${Date.now()}`,
+                heading: '',
+                contentMd: '',
+                humorTip: '',
+                mnemonic: '',
+                codeSnippet: { language: '', code: '' },
+                challengePrompt: '',
+                sectionQuiz: [],
+                playgroundEmbedId: '',
+                autoCheckSnippet: false
+              };
+              setCurrentTutorial({
+                ...currentTutorial,
+                biteSizeSections: [...(currentTutorial.biteSizeSections || []), newSection]
+              });
+            }}
+          >
+            Add Section
+          </Button>
         </div>
-      )}
+      </CollapsibleSection>
+
+      <CollapsibleSection title="Engagement" icon={<Users className="h-5 w-5 text-yellow-500" />}>
+        <div className="space-y-6">
+          <div>
+            <Label>Key Takeaways</Label>
+            <MultiSelect
+              value={currentTutorial.keyTakeaways || []}
+              onChange={arr => setCurrentTutorial({ ...currentTutorial, keyTakeaways: arr })}
+              placeholder="Add key takeaways"
+            />
+          </div>
+          <div>
+            <Label>Fun Fact</Label>
+            <Textarea
+              value={currentTutorial.funFact}
+              onChange={e => setCurrentTutorial({ ...currentTutorial, funFact: e.target.value })}
+              rows={2}
+            />
+          </div>
+          <div>
+            <Label>Reflection Prompt</Label>
+            <Textarea
+              value={currentTutorial.reflectionPrompt}
+              onChange={e => setCurrentTutorial({ ...currentTutorial, reflectionPrompt: e.target.value })}
+              rows={2}
+            />
+          </div>
+          <div>
+            <Label>Discussion Thread URL</Label>
+            <Input
+              value={currentTutorial.discussionThreadUrl}
+              onChange={e => setCurrentTutorial({ ...currentTutorial, discussionThreadUrl: e.target.value })}
+              placeholder="Enter discussion thread URL"
+            />
+          </div>
+        </div>
+      </CollapsibleSection>
+
+      <CollapsibleSection title="Progress & Rewards" icon={<Award className="h-5 w-5 text-indigo-500" />}>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <Label>Progress Badge</Label>
+            <Input
+              value={currentTutorial.progressBadge}
+              onChange={e => setCurrentTutorial({ ...currentTutorial, progressBadge: e.target.value })}
+              placeholder="Enter progress badge"
+            />
+          </div>
+          <div>
+            <Label>XP Points</Label>
+            <Input
+              type="number"
+              value={currentTutorial.xpPoints}
+              onChange={e => setCurrentTutorial({ ...currentTutorial, xpPoints: Number(e.target.value) })}
+            />
+          </div>
+          <div className="flex items-center space-x-2">
+            <Label>Streak Multiplier</Label>
+            <Switch
+              checked={!!currentTutorial.streakMultiplier}
+              onCheckedChange={checked => setCurrentTutorial({ ...currentTutorial, streakMultiplier: checked })}
+            />
+          </div>
+          <div>
+            <Label>Milestone Badges</Label>
+            <MultiSelect
+              value={currentTutorial.milestoneBadges || []}
+              onChange={arr => setCurrentTutorial({ ...currentTutorial, milestoneBadges: arr })}
+              placeholder="Add milestone badges"
+            />
+          </div>
+        </div>
+      </CollapsibleSection>
+
+      <CollapsibleSection title="Navigation" icon={<Navigation className="h-5 w-5 text-teal-500" />}>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <Label>Spaced Repetition ID</Label>
+            <Input
+              value={currentTutorial.spacedRepetitionId}
+              onChange={e => setCurrentTutorial({ ...currentTutorial, spacedRepetitionId: e.target.value })}
+              placeholder="Enter spaced repetition ID"
+            />
+          </div>
+          <div>
+            <Label>Next Tutorial ID</Label>
+            <Input
+              value={currentTutorial.nextTutorialId}
+              onChange={e => setCurrentTutorial({ ...currentTutorial, nextTutorialId: e.target.value })}
+              placeholder="Enter next tutorial ID"
+            />
+          </div>
+        </div>
+      </CollapsibleSection>
+
+      <CollapsibleSection title="Summary & Points" icon={<ListChecks className="h-5 w-5 text-blue-500" />}>
+        <div className="space-y-6">
+          <div>
+            <Label>Filled Summary</Label>
+            <Textarea
+              value={currentTutorial.filledSummary}
+              onChange={e => setCurrentTutorial({ ...currentTutorial, filledSummary: e.target.value })}
+              placeholder="Enter a detailed summary of the tutorial"
+              rows={4}
+            />
+          </div>
+          <div>
+            <Label>Built-in Points</Label>
+            <MultiSelect
+              value={currentTutorial.builtInPoints || []}
+              onChange={arr => setCurrentTutorial({ ...currentTutorial, builtInPoints: arr })}
+              placeholder="Add key points"
+            />
+          </div>
+        </div>
+      </CollapsibleSection>
+    </div>
+  );
+
+  const handleEdit = (tutorial: Tutorial) => {
+    setCurrentTutorial({
+      ...tutorial,
+      preferredLearningStyle: tutorial.preferredLearningStyle || [],
+      learningObjectives: tutorial.learningObjectives || [],
+      prerequisites: tutorial.prerequisites || [],
+      biteSizeSections: tutorial.biteSizeSections || [],
+      keyTakeaways: tutorial.keyTakeaways || [],
+      milestoneBadges: tutorial.milestoneBadges || [],
+    });
+    setEditId(tutorial.id);
+    setActiveTab('content');
+    setIsAddModalOpen(true);
+  };
+
+  // Add this function to filter and sort tutorials
+  const getFilteredTutorials = () => {
+    let filtered = [...tutorials];
+    
+    // Apply search
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(t => 
+        t.title.toLowerCase().includes(query) ||
+        t.subtitle.toLowerCase().includes(query) ||
+        t.storyContext.toLowerCase().includes(query)
+      );
+    }
+    
+    // Apply reading level filter
+    if (filterLevel !== 'all') {
+      filtered = filtered.filter(t => t.readingLevel === filterLevel);
+    }
+    
+    // Apply sorting
+    filtered.sort((a, b) => {
+      const aValue = a[sortField];
+      const bValue = b[sortField];
+      const modifier = sortDirection === 'asc' ? 1 : -1;
+      
+      if (typeof aValue === 'string' && typeof bValue === 'string') {
+        return aValue.localeCompare(bValue) * modifier;
+      }
+      return ((aValue as any) - (bValue as any)) * modifier;
+    });
+    
+    return filtered;
+  };
+
+  // Add CSS for highlighted text
+  const highlightStyle = `
+    .highlight {
+      background-color: #fef08a;
+      padding: 0 2px;
+      border-radius: 2px;
+    }
+  `;
+
+  // Add this to the head of the document
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.textContent = highlightStyle;
+    document.head.appendChild(style);
+    return () => {
+      document.head.removeChild(style);
+    };
+  }, []);
+
+  return (
+    <div className="container mx-auto p-6">
+      <div className="flex flex-col gap-6">
+        {/* Header */}
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold">Text Tutorials</h1>
+            <p className="text-gray-500">Create and manage interactive tutorials</p>
+          </div>
+          <Button onClick={handleAddTutorial}>
+            <Plus className="w-4 h-4 mr-2" />
+            Add Tutorial
+          </Button>
+        </div>
+
+        {/* Filters and Search */}
+        <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <Input
+              placeholder="Search tutorials..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          <div className="flex gap-2">
+            <Select value={filterLevel} onValueChange={setFilterLevel}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Filter by level" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Levels</SelectItem>
+                <SelectItem value="easy">Easy</SelectItem>
+                <SelectItem value="medium">Medium</SelectItem>
+                <SelectItem value="hard">Hard</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={sortField} onValueChange={(value: any) => setSortField(value)}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Sort by" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="title">Title</SelectItem>
+                <SelectItem value="createdAt">Date Created</SelectItem>
+                <SelectItem value="readingLevel">Reading Level</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc')}
+            >
+              {sortDirection === 'asc' ? <SortAsc className="h-4 w-4" /> : <SortDesc className="h-4 w-4" />}
+            </Button>
+          </div>
+        </div>
+
+        {/* Tutorials Grid */}
+        {loading && (
+          <div className="flex items-center justify-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+          </div>
+        )}
+        
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-600">
+            {error}
+          </div>
+        )}
+
+        {!loading && !error && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {getFilteredTutorials().length === 0 ? (
+              <div className="col-span-full text-center py-12 bg-gray-50 rounded-lg">
+                <p className="text-gray-500">No tutorials found</p>
+                <Button variant="link" onClick={handleAddTutorial} className="mt-2">
+                  Create your first tutorial
+                </Button>
+              </div>
+            ) : (
+              getFilteredTutorials().map(tutorial => (
+                <div key={tutorial.id} className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow p-5 flex flex-col gap-3 border border-gray-100">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1 min-w-0">
+                      <h2 className="font-semibold text-lg truncate">{tutorial.title}</h2>
+                      <p className="text-sm text-gray-500 truncate">{tutorial.subtitle}</p>
+                    </div>
+                    <div className="flex gap-1">
+                      <Button size="icon" variant="ghost" onClick={() => setViewId(tutorial.id)}>
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                      <Button size="icon" variant="ghost" onClick={() => handleEdit(tutorial)}>
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => handleDelete(tutorial.id)}
+                        disabled={deletingId === tutorial.id}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant="secondary" className="capitalize">{tutorial.readingLevel}</Badge>
+                    <Badge variant="outline" className="text-xs">
+                      {tutorial.estimatedTimeMins} min read
+                    </Badge>
+                    {tutorial.preferredLearningStyle?.map(style => (
+                      <Badge key={style} variant="outline" className="text-xs">
+                        {style}
+                      </Badge>
+                    ))}
+                  </div>
+                  
+                  <div className="text-xs text-gray-500 flex items-center gap-2">
+                    <Clock className="h-3 w-3" />
+                    <span>
+                      Created {new Date(tutorial.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-500">XP:</span>
+                      <span className="font-medium">{tutorial.xpPoints}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-500">Sections:</span>
+                      <span className="font-medium">{tutorial.biteSizeSections?.length || 0}</span>
+                    </div>
+                  </div>
+
+                  {tutorial.filledSummary && (
+                    <p className="text-sm text-gray-600 line-clamp-2">{tutorial.filledSummary}</p>
+                  )}
+                  {tutorial.builtInPoints && tutorial.builtInPoints.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {tutorial.builtInPoints.map((point, index) => (
+                        <Badge key={index} variant="outline" className="text-xs">
+                          {point}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Add/Edit Modal */}
       {isAddModalOpen && (
@@ -814,48 +1573,7 @@ export default function TextTutorials() {
 
               <div className="p-6 overflow-y-auto space-y-8 max-h-[60vh]">
                 <TabsContent value="content" className="space-y-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="title" className="font-semibold">Lesson Title <span className="text-red-500">*</span></Label>
-                    <Input
-                      id="title"
-                      value={currentTutorial.title}
-                      onChange={(e) => {
-                        const title = e.target.value;
-                        setCurrentTutorial({
-                          ...currentTutorial,
-                          title,
-                          slug: title.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-                        });
-                      }}
-                      placeholder="e.g. Understanding Recursion"
-                      className={currentTutorial.title && currentTutorial.title.length < 5 ? 'border-red-500' : ''}
-                    />
-                    {currentTutorial.title && currentTutorial.title.length < 5 && (
-                      <div className="text-xs text-red-500">Title must be at least 5 characters.</div>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="slug" className="font-semibold">Slug / URL</Label>
-                    <Input
-                      id="slug"
-                      value={currentTutorial.slug}
-                      onChange={(e) => setCurrentTutorial({ ...currentTutorial, slug: e.target.value })}
-                      placeholder="auto-generated from title"
-                    />
-                  </div>
-                  <div className="space-y-6">
-                    {renderMarkdownEditor('body', 'Enter the main content...')}
-                    {renderMarkdownEditor('conclusion', 'Enter key takeaways and next steps...')}
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="estimatedReadTime" className="font-semibold">Estimated Read Time (minutes)</Label>
-                    <Input
-                      id="estimatedReadTime"
-                      type="number"
-                      value={currentTutorial.estimatedReadTime}
-                      onChange={(e) => setCurrentTutorial({ ...currentTutorial, estimatedReadTime: parseInt(e.target.value) })}
-                    />
-                  </div>
+                  {renderContentTab()}
                 </TabsContent>
 
                 <TabsContent value="media" className="space-y-6">
@@ -1010,7 +1728,7 @@ export default function TextTutorials() {
                   <div>
                     <Label>Prerequisites</Label>
                     <MultiSelect
-                      value={currentTutorial.prerequisites}
+                      value={currentTutorial.prerequisites || []}
                       onChange={(prerequisites) => setCurrentTutorial({ ...currentTutorial, prerequisites })}
                       placeholder="Select prerequisite lessons..."
                     />
