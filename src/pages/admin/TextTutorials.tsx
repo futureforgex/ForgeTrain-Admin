@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { firestore, storage } from '@/lib/firebase';
-import { collection, getDocs, deleteDoc, doc, updateDoc, addDoc } from 'firebase/firestore';
+import { collection, getDocs, deleteDoc, doc, updateDoc, addDoc, setDoc, serverTimestamp, query, orderBy } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Edit, Trash2, Eye, Plus, Save, Clock, Image, FileText, Settings, FileCode, 
@@ -8,7 +8,7 @@ import { Edit, Trash2, Eye, Plus, Save, Clock, Image, FileText, Settings, FileCo
   AlignLeft, AlignCenter, AlignRight, Space, Code, Quote, 
   Table, Link, Image as ImageIcon, CheckSquare, Minus, 
   ChevronDown, ChevronUp, Indent, Outdent, Strikethrough, 
-  Underline, Highlighter, Palette, Users, Award, Navigation, Search, Filter, SortAsc, SortDesc, ListChecks, Eraser } from 'lucide-react';
+  Underline, Highlighter, Palette, Users, Award, Navigation, Search, Filter, SortAsc, SortDesc, ListChecks, Eraser, RefreshCw } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -23,6 +23,8 @@ import { FileUploader } from '@/components/ui/file-uploader';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import ReactMarkdown from 'react-markdown';
 import TurndownService from 'turndown';
+import { debounce } from 'lodash';
+import { v4 as uuidv4 } from 'uuid';
 
 interface Tutorial {
   id: string;
@@ -60,8 +62,8 @@ interface Tutorial {
   milestoneBadges: string[];
   spacedRepetitionId: string;
   nextTutorialId: string;
-  createdAt: string;
-  updatedAt: string;
+  createdAt: Date;
+  updatedAt: Date;
   body: string;
   metaDescription: string;
   category: string;
@@ -76,8 +78,8 @@ interface Tutorial {
   codeSnippets?: { url: string; name: string }[];
   slug: string;
   estimatedReadTime: number;
-  filledSummary?: string;
-  builtInPoints?: string[];
+  filledSummary: string;
+  builtInPoints: string[];
 }
 
 // Helper for Firestore Timestamp
@@ -339,6 +341,122 @@ const ContentEditor: React.FC<{
   );
 };
 
+// Add this at the top of the file, after the imports
+const defaultTutorial: Tutorial = {
+  id: '',
+  tutorialId: '',
+  topicId: '',
+  title: '',
+  subtitle: '',
+  coverImageUrl: '',
+  altText: '',
+  estimatedTimeMins: 0,
+  readingLevel: 'medium',
+  preferredLearningStyle: [],
+  storyContext: '',
+  learningObjectives: [],
+  prerequisites: [],
+  biteSizeSections: [],
+  keyTakeaways: [],
+  funFact: '',
+  reflectionPrompt: '',
+  discussionThreadUrl: '',
+  progressBadge: '',
+  xpPoints: 0,
+  streakMultiplier: false,
+  milestoneBadges: [],
+  spacedRepetitionId: '',
+  nextTutorialId: '',
+  createdAt: new Date(),
+  updatedAt: new Date(),
+  body: '',
+  metaDescription: '',
+  category: '',
+  tags: [],
+  status: 'draft',
+  introduction: '',
+  conclusion: '',
+  images: [],
+  diagrams: [],
+  downloadableAssets: [],
+  codeSnippets: [],
+  slug: '',
+  estimatedReadTime: 0,
+  filledSummary: '',
+  builtInPoints: []
+};
+
+// Add this function to generate IDs
+const generateIds = () => {
+  const timestamp = Date.now().toString();
+  const random = Math.random().toString(36).substring(2, 8);
+  return {
+    tutorialId: `TUT-${timestamp}-${random}`,
+    topicId: `TOP-${timestamp}-${random}`
+  };
+};
+
+// Add this component for image upload
+const ImageUpload: React.FC<{
+  value: string;
+  onChange: (url: string) => void;
+  onError: (message: string) => void;
+}> = ({ value, onChange, onError }) => {
+  const [uploading, setUploading] = useState(false);
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setUploading(true);
+      const storageRef = ref(storage, `tutorial-images/${uuidv4()}-${file.name}`);
+      await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(storageRef);
+      onChange(downloadURL);
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      onError('Failed to upload image');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-4">
+        <Input
+          type="file"
+          accept="image/*"
+          onChange={handleImageUpload}
+          disabled={uploading}
+          className="max-w-xs"
+        />
+        {uploading && (
+          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900"></div>
+        )}
+      </div>
+      {value && (
+        <div className="relative w-full h-48 rounded-lg overflow-hidden border">
+          <img
+            src={value}
+            alt="Cover preview"
+            className="w-full h-full object-cover"
+          />
+          <Button
+            variant="destructive"
+            size="sm"
+            className="absolute top-2 right-2"
+            onClick={() => onChange('')}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export default function TextTutorials() {
   const [tutorials, setTutorials] = useState<Tutorial[]>([]);
   const [loading, setLoading] = useState(true);
@@ -372,8 +490,8 @@ export default function TextTutorials() {
     milestoneBadges: [],
     spacedRepetitionId: '',
     nextTutorialId: '',
-    createdAt: '',
-    updatedAt: '',
+    createdAt: new Date(),
+    updatedAt: new Date(),
     body: '',
     metaDescription: '',
     category: '',
@@ -410,236 +528,187 @@ export default function TextTutorials() {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [filterLevel, setFilterLevel] = useState<string>('all');
 
-  // Modify the useEffect for auto-save to include local storage
-  useEffect(() => {
-    if (!isAddModalOpen) return;
-
-    const autoSaveTimer = setInterval(async () => {
+  // Update the Firebase save function
+  const saveTutorial = async (tutorial: Tutorial) => {
       try {
         setAutoSaveStatus('saving');
-        saveDraftToLocalStorage(currentTutorial);
-        setAutoSaveStatus('saved');
-      } catch (err) {
-        setAutoSaveStatus('error');
-      }
-    }, 30000); // 30 seconds
-
-    return () => clearInterval(autoSaveTimer);
-  }, [isAddModalOpen, currentTutorial]);
-
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyPress = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.key === 's') {
-        e.preventDefault();
-        handleSave();
-      }
-      if (e.ctrlKey && e.key === 'Enter') {
-        e.preventDefault();
-        if (validateForm()) {
-          handlePublish();
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyPress);
-    return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [currentTutorial]);
-
-  const validateForm = () => {
-    if (currentTutorial.title?.length < 5) {
-      toast({
-        title: 'Validation Error',
-        description: 'Title must be at least 5 characters long',
-        variant: 'destructive',
-      });
-      return false;
-    }
-
-    if (currentTutorial.body?.split(/\s+/).length < 100) {
-      toast({
-        title: 'Warning',
-        description: 'Body content seems too short. Consider adding more content.',
-        variant: 'default',
-      });
-    }
-
-    if (currentTutorial.metaDescription?.length > 160) {
-      toast({
-        title: 'Validation Error',
-        description: 'Meta description must be 160 characters or less',
-        variant: 'destructive',
-      });
-      return false;
-    }
-
-    return true;
-  };
-
-  // Add this function to save draft to local storage
-  const saveDraftToLocalStorage = (tutorial: Partial<Tutorial>) => {
-    try {
-      if (tutorial.title || tutorial.body) {
-        localStorage.setItem(DRAFT_TUTORIAL_KEY, JSON.stringify({
-          ...tutorial,
-          lastSaved: new Date().toISOString()
-        }));
-      }
-    } catch (err) {
-      console.error('Failed to save draft to local storage:', err);
-    }
-  };
-
-  // Add this function to load draft from local storage
-  const loadDraftFromLocalStorage = (): Partial<Tutorial> | null => {
-    try {
-      const saved = localStorage.getItem(DRAFT_TUTORIAL_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        // Remove the lastSaved field when loading
-        const { lastSaved, ...tutorial } = parsed;
-        return tutorial;
-      }
-      return null;
-    } catch (err) {
-      console.error('Failed to load draft from local storage:', err);
-      return null;
-    }
-  };
-
-  // Modify the handleFormClose function
-  const handleFormClose = () => {
-    if (currentTutorial.title || currentTutorial.body) {
-      saveDraftToLocalStorage(currentTutorial);
-      toast({
-        title: 'Draft Saved',
-        description: 'Your changes have been saved as a draft',
-      });
-    }
-    setIsAddModalOpen(false);
-  };
-
-  // Modify the handleAddTutorial function
-  const handleAddTutorial = () => {
-    const savedDraft = loadDraftFromLocalStorage();
-    if (savedDraft) {
-      toast({
-        title: 'Draft Loaded',
-        description: 'Your previous draft has been loaded',
-      });
-    }
-    setCurrentTutorial(savedDraft || {
-      tutorialId: '',
-      topicId: '',
-      title: '',
-      subtitle: '',
-      coverImageUrl: '',
-      altText: '',
-      estimatedTimeMins: 0,
-      readingLevel: '',
-      preferredLearningStyle: [],
-      storyContext: '',
-      learningObjectives: [],
-      prerequisites: [],
-      biteSizeSections: [],
-      keyTakeaways: [],
-      funFact: '',
-      reflectionPrompt: '',
-      discussionThreadUrl: '',
-      progressBadge: '',
-      xpPoints: 0,
-      streakMultiplier: false,
-      milestoneBadges: [],
-      spacedRepetitionId: '',
-      nextTutorialId: '',
-      createdAt: '',
-      updatedAt: '',
-      body: '',
-      metaDescription: '',
-      category: '',
-      tags: [],
-      status: 'draft',
-      introduction: '',
-      conclusion: '',
-      images: [],
-      diagrams: [],
-      downloadableAssets: [],
-      codeSnippets: [],
-      slug: '',
-      estimatedReadTime: 0,
-      filledSummary: '',
-      builtInPoints: [],
-    });
-    setEditId(null);
-    setActiveTab('content');
-    setIsAddModalOpen(true);
-  };
-
-  // Modify the handleSave function
-  const handleSave = async () => {
-    if (!validateForm()) return;
-    try {
-      if (editId) {
-        await updateDoc(doc(firestore, 'tutorials', editId), {
-          ...currentTutorial,
-          updatedAt: new Date(),
-        });
-        toast({
-          title: 'Success',
-          description: 'Tutorial updated successfully',
-        });
-      } else {
-        await addDoc(collection(firestore, 'tutorials'), {
-          ...currentTutorial,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        });
-        toast({
-          title: 'Success',
-          description: 'Tutorial created successfully',
-        });
-      }
-      localStorage.removeItem(DRAFT_TUTORIAL_KEY);
-      setIsAddModalOpen(false);
-      setEditId(null);
-      fetchTutorials();
-    } catch (err) {
-      toast({
-        title: 'Error',
-        description: 'Failed to save tutorial',
-        variant: 'destructive',
-      });
-    }
-  };
-
-  // Modify the handlePublish function
-  const handlePublish = async () => {
-    if (!validateForm()) return;
-    try {
+      const tutorialRef = doc(firestore, 'tutorials', tutorial.id);
+      
+      // Prepare the data for Firebase
       const tutorialData = {
-        ...currentTutorial,
-        updatedAt: new Date(),
+        ...tutorial,
+        introduction: tutorial.introduction || '',
+        body: tutorial.body || '',
+        conclusion: tutorial.conclusion || '',
+        // Convert arrays to Firebase arrays
+        biteSizeSections: tutorial.biteSizeSections?.map(section => ({
+          ...section,
+          sectionQuiz: section.sectionQuiz || [],
+          codeSnippet: section.codeSnippet || { language: '', code: '' }
+        })) || [],
+        preferredLearningStyle: tutorial.preferredLearningStyle || [],
+        learningObjectives: tutorial.learningObjectives || [],
+        prerequisites: tutorial.prerequisites || [],
+        keyTakeaways: tutorial.keyTakeaways || [],
+        milestoneBadges: tutorial.milestoneBadges || [],
+        builtInPoints: tutorial.builtInPoints || [],
+        // Ensure all required fields have default values
+        filledSummary: tutorial.filledSummary || '',
+        estimatedTimeMins: tutorial.estimatedTimeMins || 0,
+        xpPoints: tutorial.xpPoints || 0,
+        readingLevel: tutorial.readingLevel || 'medium',
+        // Add timestamps
+        updatedAt: serverTimestamp(),
+        createdAt: tutorial.createdAt || serverTimestamp()
       };
 
-      if (editId) {
-        await updateDoc(doc(firestore, 'tutorials', editId), tutorialData);
-      } else {
-        await addDoc(collection(firestore, 'tutorials'), tutorialData);
-      }
-
-      localStorage.removeItem(DRAFT_TUTORIAL_KEY);
+      await setDoc(tutorialRef, tutorialData, { merge: true });
+      setAutoSaveStatus('saved');
       toast({
-        title: 'Success',
-        description: 'Tutorial published successfully',
+        title: "Success",
+        description: "Tutorial saved successfully",
       });
-      setIsAddModalOpen(false);
-      setEditId(null);
-      fetchTutorials();
-    } catch (err) {
+    } catch (error) {
+      console.error('Error saving tutorial:', error);
+      setAutoSaveStatus('error');
       toast({
-        title: 'Error',
-        description: 'Failed to publish tutorial',
-        variant: 'destructive',
+        title: "Error",
+        description: "Failed to save tutorial",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Update the loadTutorials function to handle Firebase timestamps
+  const loadTutorials = async () => {
+    try {
+      setLoading(true);
+      const tutorialsRef = collection(firestore, 'tutorials');
+      const q = query(tutorialsRef, orderBy('createdAt', 'desc'));
+      const querySnapshot = await getDocs(q);
+      
+      const loadedTutorials = querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          introduction: data.introduction || '',
+          body: data.body || '',
+          conclusion: data.conclusion || '',
+          // ...other fields
+        } as Tutorial;
+      });
+      
+      setTutorials(loadedTutorials);
+      setError(null);
+    } catch (error) {
+      console.error('Error loading tutorials:', error);
+      setError('Failed to load tutorials');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Update the deleteTutorial function
+  const deleteTutorial = async (id: string) => {
+    try {
+      setDeletingId(id);
+      const tutorialRef = doc(firestore, 'tutorials', id);
+      await deleteDoc(tutorialRef);
+      
+      // Update local state
+      setTutorials(tutorials.filter(t => t.id !== id));
+        toast({
+        title: "Success",
+        description: "Tutorial deleted successfully",
+      });
+    } catch (error) {
+      console.error('Error deleting tutorial:', error);
+        toast({
+        title: "Error",
+        description: "Failed to delete tutorial",
+        variant: "destructive",
+      });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  // Add this function to handle auto-save
+  const handleAutoSave = useCallback(
+    debounce(async (tutorial: Tutorial) => {
+      if (tutorial.id) {
+        await saveTutorial(tutorial);
+      }
+    }, 1000),
+    []
+  );
+
+  // Update the useEffect for auto-save
+  useEffect(() => {
+    if (currentTutorial.id) {
+      handleAutoSave(currentTutorial);
+    }
+  }, [currentTutorial, handleAutoSave]);
+
+  // Add this function to handle tutorial creation
+  const handleCreateTutorial = async () => {
+    try {
+      const newTutorial: Tutorial = {
+        ...defaultTutorial,
+        id: crypto.randomUUID(),
+        tutorialId: currentTutorial.tutorialId || '',
+        topicId: currentTutorial.topicId || '',
+        title: currentTutorial.title || '',
+        subtitle: currentTutorial.subtitle || '',
+        coverImageUrl: currentTutorial.coverImageUrl || '',
+        altText: currentTutorial.altText || '',
+        estimatedTimeMins: currentTutorial.estimatedTimeMins || 0,
+        readingLevel: currentTutorial.readingLevel || 'medium',
+        preferredLearningStyle: currentTutorial.preferredLearningStyle || [],
+        storyContext: currentTutorial.storyContext || '',
+        learningObjectives: currentTutorial.learningObjectives || [],
+        prerequisites: currentTutorial.prerequisites || [],
+        biteSizeSections: currentTutorial.biteSizeSections || [],
+        keyTakeaways: currentTutorial.keyTakeaways || [],
+        funFact: currentTutorial.funFact || '',
+        reflectionPrompt: currentTutorial.reflectionPrompt || '',
+        discussionThreadUrl: currentTutorial.discussionThreadUrl || '',
+        progressBadge: currentTutorial.progressBadge || '',
+        xpPoints: currentTutorial.xpPoints || 0,
+        streakMultiplier: currentTutorial.streakMultiplier || false,
+        milestoneBadges: currentTutorial.milestoneBadges || [],
+        spacedRepetitionId: currentTutorial.spacedRepetitionId || '',
+        nextTutorialId: currentTutorial.nextTutorialId || '',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        filledSummary: currentTutorial.filledSummary || '',
+        builtInPoints: currentTutorial.builtInPoints || [],
+        body: currentTutorial.body || '',
+        metaDescription: currentTutorial.metaDescription || '',
+        category: currentTutorial.category || '',
+        tags: currentTutorial.tags || [],
+        status: currentTutorial.status || 'draft',
+        introduction: currentTutorial.introduction || '',
+        conclusion: currentTutorial.conclusion || '',
+        images: currentTutorial.images || [],
+        diagrams: currentTutorial.diagrams || [],
+        downloadableAssets: currentTutorial.downloadableAssets || [],
+        codeSnippets: currentTutorial.codeSnippets || [],
+        slug: currentTutorial.slug || '',
+        estimatedReadTime: currentTutorial.estimatedReadTime || 0
+      };
+      
+      await saveTutorial(newTutorial);
+      setTutorials([newTutorial, ...tutorials]);
+      setIsAddModalOpen(false);
+      setCurrentTutorial(defaultTutorial);
+    } catch (error) {
+      console.error('Error creating tutorial:', error);
+      toast({
+        title: "Error",
+        description: "Failed to create tutorial",
+        variant: "destructive",
       });
     }
   };
@@ -904,19 +973,37 @@ export default function TextTutorials() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <Label>Tutorial ID</Label>
-            <Input
-              value={currentTutorial.tutorialId}
-              onChange={e => setCurrentTutorial({ ...currentTutorial, tutorialId: e.target.value })}
-              placeholder="Enter tutorial ID"
-            />
+            <div className="flex gap-2">
+              <Input
+                value={currentTutorial.tutorialId}
+                onChange={e => setCurrentTutorial({ ...currentTutorial, tutorialId: e.target.value })}
+                placeholder="Enter tutorial ID"
+              />
+        <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setCurrentTutorial({ ...currentTutorial, tutorialId: generateIds().tutorialId })}
+              >
+                <RefreshCw className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
           <div>
             <Label>Topic ID</Label>
-            <Input
-              value={currentTutorial.topicId}
-              onChange={e => setCurrentTutorial({ ...currentTutorial, topicId: e.target.value })}
-              placeholder="Enter topic ID"
-            />
+            <div className="flex gap-2">
+              <Input
+                value={currentTutorial.topicId}
+                onChange={e => setCurrentTutorial({ ...currentTutorial, topicId: e.target.value })}
+                placeholder="Enter topic ID"
+              />
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setCurrentTutorial({ ...currentTutorial, topicId: generateIds().topicId })}
+              >
+                <RefreshCw className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
           <div>
             <Label>Title</Label>
@@ -938,13 +1025,17 @@ export default function TextTutorials() {
       </CollapsibleSection>
 
       <CollapsibleSection title="Media" icon={<Image className="h-5 w-5 text-green-500" />}>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="space-y-6">
           <div>
-            <Label>Cover Image URL</Label>
-            <Input
+            <Label>Cover Image</Label>
+            <ImageUpload
               value={currentTutorial.coverImageUrl}
-              onChange={e => setCurrentTutorial({ ...currentTutorial, coverImageUrl: e.target.value })}
-              placeholder="Paste image URL"
+              onChange={url => setCurrentTutorial({ ...currentTutorial, coverImageUrl: url })}
+              onError={message => toast({
+                title: 'Error',
+                description: message,
+                variant: 'destructive',
+              })}
             />
           </div>
           <div>
@@ -974,10 +1065,10 @@ export default function TextTutorials() {
               value={currentTutorial.readingLevel}
               onValueChange={value => setCurrentTutorial({ ...currentTutorial, readingLevel: value })}
             >
-              <SelectTrigger>
+              <SelectTrigger className="w-full">
                 <SelectValue placeholder="Select level" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="z-50">
                 <SelectItem value="easy">Easy</SelectItem>
                 <SelectItem value="medium">Medium</SelectItem>
                 <SelectItem value="hard">Hard</SelectItem>
@@ -995,32 +1086,19 @@ export default function TextTutorials() {
         </div>
       </CollapsibleSection>
 
-      <CollapsibleSection title="Content" icon={<FileText className="h-5 w-5 text-orange-500" />}>
+      <CollapsibleSection title="Main Content" icon={<FileText className="h-5 w-5 text-indigo-500" />}>
         <div className="space-y-6">
           <div>
-            <Label>Story Context</Label>
-            <Textarea
-              value={currentTutorial.storyContext}
-              onChange={e => setCurrentTutorial({ ...currentTutorial, storyContext: e.target.value })}
-              placeholder="Describe the story context"
-              rows={4}
-            />
+            <Label>Introduction</Label>
+            {renderMarkdownEditor('introduction', 'Write the introduction...')}
           </div>
           <div>
-            <Label>Learning Objectives</Label>
-            <MultiSelect
-              value={currentTutorial.learningObjectives || []}
-              onChange={arr => setCurrentTutorial({ ...currentTutorial, learningObjectives: arr })}
-              placeholder="Add learning objectives"
-            />
+            <Label>Body</Label>
+            {renderMarkdownEditor('body', 'Write the main body...')}
           </div>
           <div>
-            <Label>Prerequisites</Label>
-            <MultiSelect
-              value={currentTutorial.prerequisites || []}
-              onChange={arr => setCurrentTutorial({ ...currentTutorial, prerequisites: arr })}
-              placeholder="Add prerequisites"
-            />
+            <Label>Conclusion</Label>
+            {renderMarkdownEditor('conclusion', 'Write the conclusion...')}
           </div>
         </div>
       </CollapsibleSection>
@@ -1034,7 +1112,7 @@ export default function TextTutorials() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => {
+          onClick={() => {
                     const newSections = [...(currentTutorial.biteSizeSections || [])];
                     newSections.splice(index, 1);
                     setCurrentTutorial({ ...currentTutorial, biteSizeSections: newSections });
@@ -1069,13 +1147,17 @@ export default function TextTutorials() {
               </div>
               <div>
                 <Label>Content (Markdown)</Label>
-                <ContentEditor
+                <MarkdownEditor
+                  key={`biteSizeSections-${index}`}
+                  name={`biteSizeSections-${index}-contentMd`}
                   value={section.contentMd}
                   onChange={value => {
                     const newSections = [...(currentTutorial.biteSizeSections || [])];
                     newSections[index] = { ...section, contentMd: value };
                     setCurrentTutorial({ ...currentTutorial, biteSizeSections: newSections });
                   }}
+                  placeholder="Section content..."
+                  className="min-h-[120px] p-4"
                 />
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1135,14 +1217,17 @@ export default function TextTutorials() {
               </div>
               <div>
                 <Label>Challenge Prompt</Label>
-                <Textarea
+                <MarkdownEditor
+                  key={`biteSizeSections-${index}-challengePrompt`}
+                  name={`biteSizeSections-${index}-challengePrompt`}
                   value={section.challengePrompt}
-                  onChange={e => {
+                  onChange={value => {
                     const newSections = [...(currentTutorial.biteSizeSections || [])];
-                    newSections[index] = { ...section, challengePrompt: e.target.value };
+                    newSections[index] = { ...section, challengePrompt: value };
                     setCurrentTutorial({ ...currentTutorial, biteSizeSections: newSections });
                   }}
-                  rows={2}
+                  placeholder="Enter challenge prompt"
+                  className="min-h-[80px] p-4"
                 />
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1185,7 +1270,7 @@ export default function TextTutorials() {
                 playgroundEmbedId: '',
                 autoCheckSnippet: false
               };
-              setCurrentTutorial({
+            setCurrentTutorial({
                 ...currentTutorial,
                 biteSizeSections: [...(currentTutorial.biteSizeSections || []), newSection]
               });
@@ -1208,19 +1293,11 @@ export default function TextTutorials() {
           </div>
           <div>
             <Label>Fun Fact</Label>
-            <Textarea
-              value={currentTutorial.funFact}
-              onChange={e => setCurrentTutorial({ ...currentTutorial, funFact: e.target.value })}
-              rows={2}
-            />
+            {renderMarkdownEditor('funFact', 'Enter a fun fact')}
           </div>
           <div>
             <Label>Reflection Prompt</Label>
-            <Textarea
-              value={currentTutorial.reflectionPrompt}
-              onChange={e => setCurrentTutorial({ ...currentTutorial, reflectionPrompt: e.target.value })}
-              rows={2}
-            />
+            {renderMarkdownEditor('reflectionPrompt', 'Enter a reflection prompt')}
           </div>
           <div>
             <Label>Discussion Thread URL</Label>
@@ -1294,12 +1371,7 @@ export default function TextTutorials() {
         <div className="space-y-6">
           <div>
             <Label>Filled Summary</Label>
-            <Textarea
-              value={currentTutorial.filledSummary}
-              onChange={e => setCurrentTutorial({ ...currentTutorial, filledSummary: e.target.value })}
-              placeholder="Enter a detailed summary of the tutorial"
-              rows={4}
-            />
+            {renderMarkdownEditor('filledSummary', 'Enter a detailed summary of the tutorial')}
           </div>
           <div>
             <Label>Built-in Points</Label>
@@ -1382,6 +1454,82 @@ export default function TextTutorials() {
     };
   }, []);
 
+  // Add these functions back
+  const handleAddTutorial = () => {
+    const { tutorialId, topicId } = generateIds();
+    setCurrentTutorial({
+      ...defaultTutorial,
+      tutorialId,
+      topicId
+            });
+            setEditId(null);
+            setActiveTab('content');
+            setIsAddModalOpen(true);
+  };
+
+  const handleFormClose = () => {
+    setIsAddModalOpen(false);
+    setCurrentTutorial(defaultTutorial);
+    setEditId(null);
+  };
+
+  // Update the handleSave function to ensure all required fields
+  const handleSave = async () => {
+    try {
+      if (editId) {
+        const updatedTutorial: Tutorial = {
+          ...defaultTutorial,
+          ...currentTutorial,
+          id: editId
+        };
+        await saveTutorial(updatedTutorial);
+        toast({
+          title: 'Success',
+          description: 'Tutorial updated successfully',
+        });
+      } else {
+        await handleCreateTutorial();
+      }
+      setIsAddModalOpen(false);
+      setEditId(null);
+      loadTutorials();
+    } catch (error) {
+      console.error('Error saving tutorial:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to save tutorial',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  // Update the handlePublish function to ensure all required fields
+  const handlePublish = async () => {
+    try {
+      const publishedTutorial: Tutorial = {
+        ...defaultTutorial,
+        ...currentTutorial,
+        id: currentTutorial.id || crypto.randomUUID(),
+        status: 'published'
+      };
+      await saveTutorial(publishedTutorial);
+      toast({
+        title: 'Success',
+        description: 'Tutorial published successfully',
+      });
+      setIsAddModalOpen(false);
+      setEditId(null);
+      loadTutorials();
+    } catch (error) {
+      console.error('Error publishing tutorial:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to publish tutorial',
+        variant: 'destructive',
+      });
+    }
+  };
+
   return (
     <div className="container mx-auto p-6">
       <div className="flex flex-col gap-6">
@@ -1392,10 +1540,10 @@ export default function TextTutorials() {
             <p className="text-gray-500">Create and manage interactive tutorials</p>
           </div>
           <Button onClick={handleAddTutorial}>
-            <Plus className="w-4 h-4 mr-2" />
-            Add Tutorial
-          </Button>
-        </div>
+          <Plus className="w-4 h-4 mr-2" />
+          Add Tutorial
+        </Button>
+      </div>
 
         {/* Filters and Search */}
         <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
@@ -1413,7 +1561,7 @@ export default function TextTutorials() {
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Filter by level" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="z-50">
                 <SelectItem value="all">All Levels</SelectItem>
                 <SelectItem value="easy">Easy</SelectItem>
                 <SelectItem value="medium">Medium</SelectItem>
@@ -1424,7 +1572,7 @@ export default function TextTutorials() {
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Sort by" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="z-50">
                 <SelectItem value="title">Title</SelectItem>
                 <SelectItem value="createdAt">Date Created</SelectItem>
                 <SelectItem value="readingLevel">Reading Level</SelectItem>
@@ -1453,8 +1601,8 @@ export default function TextTutorials() {
           </div>
         )}
 
-        {!loading && !error && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {!loading && !error && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {getFilteredTutorials().length === 0 ? (
               <div className="col-span-full text-center py-12 bg-gray-50 rounded-lg">
                 <p className="text-gray-500">No tutorials found</p>
@@ -1471,22 +1619,22 @@ export default function TextTutorials() {
                       <p className="text-sm text-gray-500 truncate">{tutorial.subtitle}</p>
                     </div>
                     <div className="flex gap-1">
-                      <Button size="icon" variant="ghost" onClick={() => setViewId(tutorial.id)}>
-                        <Eye className="h-4 w-4" />
-                      </Button>
+                    <Button size="icon" variant="ghost" onClick={() => setViewId(tutorial.id)}>
+                      <Eye className="h-4 w-4" />
+                    </Button>
                       <Button size="icon" variant="ghost" onClick={() => handleEdit(tutorial)}>
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => handleDelete(tutorial.id)}
-                        disabled={deletingId === tutorial.id}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => handleDelete(tutorial.id)}
+                      disabled={deletingId === tutorial.id}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
+                </div>
                   
                   <div className="flex flex-wrap gap-2">
                     <Badge variant="secondary" className="capitalize">{tutorial.readingLevel}</Badge>
@@ -1496,16 +1644,16 @@ export default function TextTutorials() {
                     {tutorial.preferredLearningStyle?.map(style => (
                       <Badge key={style} variant="outline" className="text-xs">
                         {style}
-                      </Badge>
-                    ))}
-                  </div>
+                    </Badge>
+                  ))}
+                </div>
                   
                   <div className="text-xs text-gray-500 flex items-center gap-2">
                     <Clock className="h-3 w-3" />
                     <span>
                       Created {new Date(tutorial.createdAt).toLocaleDateString()}
-                    </span>
-                  </div>
+                  </span>
+                </div>
                   
                   <div className="flex items-center justify-between text-xs">
                     <div className="flex items-center gap-2">
@@ -1530,11 +1678,11 @@ export default function TextTutorials() {
                       ))}
                     </div>
                   )}
-                </div>
-              ))
-            )}
-          </div>
-        )}
+              </div>
+            ))
+          )}
+        </div>
+      )}
       </div>
 
       {/* Add/Edit Modal */}
@@ -1692,7 +1840,7 @@ export default function TextTutorials() {
                       <SelectTrigger className="w-[200px]">
                         <SelectValue placeholder="Select category" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="z-50">
                         {categories.map((cat) => (
                           <SelectItem key={cat} value={cat}>{cat}</SelectItem>
                         ))}
@@ -1790,7 +1938,7 @@ export default function TextTutorials() {
                       <SelectTrigger className="w-[200px]">
                         <SelectValue placeholder="Select reading level" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="z-50">
                         <SelectItem value="easy">Easy</SelectItem>
                         <SelectItem value="medium">Medium</SelectItem>
                         <SelectItem value="hard">Hard</SelectItem>
@@ -1834,19 +1982,15 @@ export default function TextTutorials() {
                     {selectedTutorial.status}
                   </span>
                 </h2>
-                <div className="flex flex-wrap gap-4 text-xs text-indigo-100 font-medium">
+                <div className="flex flex-wrap gap-2 text-xs text-indigo-100 font-medium mt-2">
                   <span><FileText className="inline h-4 w-4 mr-1" />Slug: <span className="font-mono text-white">{selectedTutorial.slug}</span></span>
-                  {selectedTutorial.publishDate && (
-                    <span><Clock className="inline h-4 w-4 mr-1" />Published: {
-                      (selectedTutorial.publishDate instanceof Date)
-                        ? selectedTutorial.publishDate.toLocaleString()
-                        : isFirestoreTimestamp(selectedTutorial.publishDate as any)
-                          ? new Date((selectedTutorial.publishDate as any).seconds * 1000).toLocaleString()
-                          : ''
-                    }</span>
-                  )}
-                  <span><Badge className="bg-blue-200 text-blue-800 ml-1">{selectedTutorial.readingLevel}</Badge></span>
-                  <span><Clock className="inline h-4 w-4 mr-1" />{selectedTutorial.estimatedReadTime} min read</span>
+                  <Badge className="bg-blue-200 text-blue-800 ml-1">{selectedTutorial.readingLevel}</Badge>
+                  <span><Clock className="inline h-4 w-4 mr-1" />{selectedTutorial.estimatedTimeMins} min</span>
+                  <span>XP: <span className="font-mono text-white">{selectedTutorial.xpPoints}</span></span>
+                  {selectedTutorial.category && <Badge className="bg-indigo-100 text-indigo-700 border-none">{selectedTutorial.category}</Badge>}
+                  {selectedTutorial.tags && selectedTutorial.tags.map(tag => (
+                    <Badge key={tag} variant="outline" className="text-xs border-gray-300 bg-gray-200 text-gray-700">{tag}</Badge>
+                  ))}
                 </div>
               </div>
               <button
@@ -1858,52 +2002,177 @@ export default function TextTutorials() {
               </button>
             </div>
             <div className="px-8 py-6 bg-gray-50 rounded-b-2xl">
-              {/* Tags & Category */}
-              <div className="mb-4 flex flex-wrap gap-2 items-center">
-                <Badge variant="secondary" className="capitalize bg-indigo-100 text-indigo-700 border-none">{selectedTutorial.category}</Badge>
-                {selectedTutorial.tags && selectedTutorial.tags.map(tag => (
-                  <Badge key={tag} variant="outline" className="text-xs border-gray-300 bg-gray-200 text-gray-700">{tag}</Badge>
-                ))}
-              </div>
-              {/* Introduction */}
-              <div className="mb-6">
-                <h3 className="font-semibold text-lg flex items-center gap-2 mb-2"><FileText className="h-5 w-5 text-indigo-400" />Introduction</h3>
-                <div className="prose prose-sm max-w-none bg-white rounded p-4 border">
-                  <ReactMarkdown>{selectedTutorial.introduction}</ReactMarkdown>
+              {/* Cover Image */}
+              {selectedTutorial.coverImageUrl && (
+                <div className="mb-6 flex items-center gap-4">
+                  <img src={selectedTutorial.coverImageUrl} alt={selectedTutorial.altText} className="w-28 h-28 object-cover rounded shadow border bg-white" />
+                  <div className="text-xs text-gray-500">{selectedTutorial.altText}</div>
                 </div>
-              </div>
-              {/* Body */}
-              <div className="mb-6">
-                <h3 className="font-semibold text-lg flex items-center gap-2 mb-2"><FileText className="h-5 w-5 text-indigo-400" />Body</h3>
-                <div className="prose prose-sm max-w-none bg-white rounded p-4 border">
-                  <ReactMarkdown>{selectedTutorial.body}</ReactMarkdown>
+              )}
+              {/* Subtitle */}
+              {selectedTutorial.subtitle && (
+                <div className="mb-4">
+                  <h3 className="font-semibold text-base text-indigo-700 mb-1">Subtitle</h3>
+                  <div className="text-gray-800 bg-white rounded p-3 border shadow-sm">{selectedTutorial.subtitle}</div>
                 </div>
-              </div>
-              {/* Conclusion */}
-              <div className="mb-6">
-                <h3 className="font-semibold text-lg flex items-center gap-2 mb-2"><FileText className="h-5 w-5 text-indigo-400" />Conclusion</h3>
-                <div className="prose prose-sm max-w-none bg-white rounded p-4 border">
-                  <ReactMarkdown>{selectedTutorial.conclusion}</ReactMarkdown>
+              )}
+              {/* Story Context */}
+              {selectedTutorial.storyContext && (
+                <div className="mb-4">
+                  <h3 className="font-semibold text-base text-indigo-700 mb-1">Story Context</h3>
+                  <div className="prose prose-sm max-w-none bg-white rounded p-3 border shadow-sm">
+                    <ReactMarkdown>{selectedTutorial.storyContext}</ReactMarkdown>
+                  </div>
                 </div>
-              </div>
-              {/* Images & Diagrams */}
-              {(selectedTutorial.images?.length > 0 || selectedTutorial.diagrams?.length > 0) && (
-                <div className="mb-6">
-                  <h3 className="font-semibold text-lg flex items-center gap-2 mb-2"><Image className="h-5 w-5 text-indigo-400" />Images & Diagrams</h3>
-                  <div className="flex flex-wrap gap-4">
-                    {(selectedTutorial.images || []).map((img, i) => (
-                      <img key={i} src={img.url} alt={img.alt} className="w-24 h-24 object-cover rounded shadow border bg-white" />
-                    ))}
-                    {(selectedTutorial.diagrams || []).map((img, i) => (
-                      <img key={i} src={img.url} alt={img.alt} className="w-24 h-24 object-cover rounded shadow border bg-white" />
+              )}
+              {/* Learning Objectives */}
+              {selectedTutorial.learningObjectives && selectedTutorial.learningObjectives.length > 0 && (
+                <div className="mb-4">
+                  <h3 className="font-semibold text-base text-indigo-700 mb-1">Learning Objectives</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedTutorial.learningObjectives.map((obj, i) => (
+                      <Badge key={i} variant="secondary" className="text-xs bg-blue-100 text-blue-700">{obj}</Badge>
                     ))}
                   </div>
                 </div>
               )}
-              {/* Downloadable Assets */}
+              {/* Key Takeaways */}
+              {selectedTutorial.keyTakeaways && selectedTutorial.keyTakeaways.length > 0 && (
+                <div className="mb-4">
+                  <h3 className="font-semibold text-base text-indigo-700 mb-1">Key Takeaways</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedTutorial.keyTakeaways.map((obj, i) => (
+                      <Badge key={i} variant="secondary" className="text-xs bg-green-100 text-green-700">{obj}</Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {/* Fun Fact */}
+              {selectedTutorial.funFact && (
+                <div className="mb-4">
+                  <h3 className="font-semibold text-base text-indigo-700 mb-1">Fun Fact</h3>
+                  <div className="prose prose-sm max-w-none bg-white rounded p-3 border shadow-sm">
+                    <ReactMarkdown>{selectedTutorial.funFact}</ReactMarkdown>
+                  </div>
+                </div>
+              )}
+              {/* Reflection Prompt */}
+              {selectedTutorial.reflectionPrompt && (
+                <div className="mb-4">
+                  <h3 className="font-semibold text-base text-indigo-700 mb-1">Reflection Prompt</h3>
+                  <div className="prose prose-sm max-w-none bg-white rounded p-3 border shadow-sm">
+                    <ReactMarkdown>{selectedTutorial.reflectionPrompt}</ReactMarkdown>
+                  </div>
+                </div>
+              )}
+              {/* Discussion Thread URL */}
+              {selectedTutorial.discussionThreadUrl && (
+                <div className="mb-4">
+                  <h3 className="font-semibold text-base text-indigo-700 mb-1">Discussion Thread</h3>
+                  <a href={selectedTutorial.discussionThreadUrl} target="_blank" rel="noopener noreferrer" className="underline text-blue-600">{selectedTutorial.discussionThreadUrl}</a>
+                </div>
+              )}
+              {/* Progress Badge, Streak, Milestones, Learning Style, Prereqs */}
+              <div className="mb-4 flex flex-wrap gap-4 items-center border-b pb-4">
+                {selectedTutorial.progressBadge && (
+                  <div><span className="font-semibold">Progress Badge:</span> <Badge className="bg-yellow-100 text-yellow-700">{selectedTutorial.progressBadge}</Badge></div>
+                )}
+                <div><span className="font-semibold">Streak Multiplier:</span> {selectedTutorial.streakMultiplier ? <span className="text-green-600 font-semibold">Yes</span> : <span className="text-gray-400">No</span>}</div>
+                {selectedTutorial.milestoneBadges && selectedTutorial.milestoneBadges.length > 0 && (
+                  <div><span className="font-semibold">Milestone Badges:</span> {selectedTutorial.milestoneBadges.map((b, i) => <Badge key={i} className="bg-pink-100 text-pink-700 ml-1">{b}</Badge>)}</div>
+                )}
+                {selectedTutorial.preferredLearningStyle && selectedTutorial.preferredLearningStyle.length > 0 && (
+                  <div><span className="font-semibold">Learning Style:</span> {selectedTutorial.preferredLearningStyle.map((s, i) => <Badge key={i} className="bg-teal-100 text-teal-700 ml-1">{s}</Badge>)}</div>
+                )}
+                {selectedTutorial.prerequisites && selectedTutorial.prerequisites.length > 0 && (
+                  <div><span className="font-semibold">Prerequisites:</span> {selectedTutorial.prerequisites.map((p, i) => <Badge key={i} className="bg-gray-100 text-gray-700 ml-1">{p}</Badge>)}</div>
+                )}
+              </div>
+              {/* Filled Summary */}
+              {selectedTutorial.filledSummary && (
+                <div className="mb-4 mt-4">
+                  <h3 className="font-semibold text-base text-indigo-700 mb-1">Summary</h3>
+                  <div className="prose prose-sm max-w-none bg-white rounded p-3 border shadow-sm">
+                    <ReactMarkdown>{selectedTutorial.filledSummary}</ReactMarkdown>
+                  </div>
+                </div>
+              )}
+              {/* Built-in Points */}
+              {selectedTutorial.builtInPoints && selectedTutorial.builtInPoints.length > 0 && (
+                <div className="mb-4">
+                  <h3 className="font-semibold text-base text-indigo-700 mb-1">Built-in Points</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedTutorial.builtInPoints.map((point, i) => (
+                      <Badge key={i} variant="secondary" className="text-xs bg-indigo-100 text-indigo-700">{point}</Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {/* Divider */}
+              <div className="my-6 border-t" />
+              {/* Bite Size Sections */}
+              {selectedTutorial.biteSizeSections && selectedTutorial.biteSizeSections.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="font-semibold text-lg flex items-center gap-2 mb-2 text-indigo-700">Bite Size Sections</h3>
+                  <div className="space-y-4">
+                    {selectedTutorial.biteSizeSections.map((section, idx) => (
+                      <div key={section.sectionId || idx} className="border rounded-lg p-4 bg-white shadow-sm">
+                        <div className="font-semibold mb-2 text-indigo-600">{section.heading}</div>
+                        <div className="mb-2 text-xs text-gray-500">Section ID: {section.sectionId}</div>
+                        {section.contentMd && (
+                          <div className="mb-2">
+                            <span className="font-semibold">Content:</span>
+                            <div className="prose prose-sm max-w-none bg-gray-50 rounded p-2 border mt-1">
+                              <ReactMarkdown>{section.contentMd}</ReactMarkdown>
+                            </div>
+                          </div>
+                        )}
+                        {section.humorTip && (
+                          <div className="mb-2"><span className="font-semibold">Humor Tip:</span> {section.humorTip}</div>
+                        )}
+                        {section.mnemonic && (
+                          <div className="mb-2"><span className="font-semibold">Mnemonic:</span> {section.mnemonic}</div>
+                        )}
+                        {section.codeSnippet && (section.codeSnippet.language || section.codeSnippet.code) && (
+                          <div className="mb-2">
+                            <span className="font-semibold">Code Snippet:</span>
+                            <pre className="bg-gray-100 rounded p-2 mt-1 overflow-x-auto text-xs"><code>{section.codeSnippet.language && `[${section.codeSnippet.language}] `}{section.codeSnippet.code}</code></pre>
+                          </div>
+                        )}
+                        {section.challengePrompt && (
+                          <div className="mb-2"><span className="font-semibold">Challenge Prompt:</span> {section.challengePrompt}</div>
+                        )}
+                        {section.playgroundEmbedId && (
+                          <div className="mb-2"><span className="font-semibold">Playground Embed ID:</span> {section.playgroundEmbedId}</div>
+                        )}
+                        <div className="mb-2"><span className="font-semibold">Auto Check Snippet:</span> {section.autoCheckSnippet ? <span className="text-green-600 font-semibold">Yes</span> : <span className="text-gray-400">No</span>}</div>
+                        {section.sectionQuiz && section.sectionQuiz.length > 0 && (
+                          <div className="mb-2"><span className="font-semibold">Section Quiz:</span> {JSON.stringify(section.sectionQuiz)}</div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {/* Divider */}
+              <div className="my-6 border-t" />
+              {/* Media & Resources */}
+              {(selectedTutorial.images?.length > 0 || selectedTutorial.diagrams?.length > 0) && (
+                <div className="mb-6">
+                  <h3 className="font-semibold text-base text-indigo-700 mb-1">Images & Diagrams</h3>
+                  <div className="flex flex-wrap gap-4">
+                    {(selectedTutorial.images || []).map((img, i) => (
+                      <img key={i} src={img.url} alt={img.alt} className="w-20 h-20 object-cover rounded shadow border bg-white" />
+                    ))}
+                    {(selectedTutorial.diagrams || []).map((img, i) => (
+                      <img key={i} src={img.url} alt={img.alt} className="w-20 h-20 object-cover rounded shadow border bg-white" />
+                    ))}
+                  </div>
+                </div>
+              )}
               {selectedTutorial.downloadableAssets?.length > 0 && (
                 <div className="mb-6">
-                  <h3 className="font-semibold text-lg flex items-center gap-2 mb-2"><FileText className="h-5 w-5 text-indigo-400" />Downloadable Assets</h3>
+                  <h3 className="font-semibold text-base text-indigo-700 mb-1">Downloadable Assets</h3>
                   <ul className="flex flex-wrap gap-4 mt-2">
                     {selectedTutorial.downloadableAssets.map((asset, i) => (
                       <li key={i} className="flex items-center gap-2 bg-white border rounded px-3 py-2 shadow text-xs">
@@ -1914,10 +2183,9 @@ export default function TextTutorials() {
                   </ul>
                 </div>
               )}
-              {/* Code Snippets */}
               {selectedTutorial.codeSnippets?.length > 0 && (
                 <div className="mb-6">
-                  <h3 className="font-semibold text-lg flex items-center gap-2 mb-2"><FileCode className="h-5 w-5 text-indigo-400" />Code Snippets</h3>
+                  <h3 className="font-semibold text-base text-indigo-700 mb-1">Code Snippets</h3>
                   <ul className="flex flex-wrap gap-4 mt-2">
                     {selectedTutorial.codeSnippets.map((snip, i) => (
                       <li key={i} className="flex items-center gap-2 bg-white border rounded px-3 py-2 shadow text-xs">
@@ -1927,10 +2195,11 @@ export default function TextTutorials() {
                   </ul>
                 </div>
               )}
-              {/* Meta & Prerequisites */}
-              <div className="mb-2 text-xs text-gray-500 flex flex-wrap gap-4">
-                <span>Meta Description: <span className="text-gray-700">{selectedTutorial.metaDescription}</span></span>
-                <span>Prerequisites: <span className="text-gray-700">{(selectedTutorial.prerequisites || []).join(', ')}</span></span>
+              {/* Meta */}
+              <div className="mb-2 text-xs text-gray-500 flex flex-wrap gap-4 border-t pt-4 mt-4">
+                {selectedTutorial.metaDescription && <span>Meta: <span className="text-gray-700">{selectedTutorial.metaDescription}</span></span>}
+                <span>Created: <span className="text-gray-700">{selectedTutorial.createdAt ? new Date(selectedTutorial.createdAt).toLocaleString() : ''}</span></span>
+                <span>Updated: <span className="text-gray-700">{selectedTutorial.updatedAt ? new Date(selectedTutorial.updatedAt).toLocaleString() : ''}</span></span>
               </div>
               <div className="flex justify-end mt-8">
                 <Button onClick={() => setViewId(null)} className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded shadow">
