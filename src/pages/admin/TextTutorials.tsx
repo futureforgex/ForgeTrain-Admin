@@ -46,7 +46,11 @@ interface Tutorial {
     contentMd: string;
     humorTip: string;
     mnemonic: string;
-    codeSnippet: { language: string; code: string };
+    codeSnippet: {
+      language: string;
+      code: string;
+      explanations: string[];
+    };
     challengePrompt: string;
     sectionQuiz: any[];
     playgroundEmbedId: string;
@@ -544,7 +548,7 @@ export default function TextTutorials() {
         biteSizeSections: tutorial.biteSizeSections?.map(section => ({
           ...section,
           sectionQuiz: section.sectionQuiz || [],
-          codeSnippet: section.codeSnippet || { language: '', code: '' }
+          codeSnippet: section.codeSnippet || { language: '', code: '', explanations: [] }
         })) || [],
         preferredLearningStyle: tutorial.preferredLearningStyle || [],
         learningObjectives: tutorial.learningObjectives || [],
@@ -1184,35 +1188,165 @@ export default function TextTutorials() {
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label>Code Language</Label>
-                  <Input
-                    value={section.codeSnippet?.language}
-                    onChange={e => {
-                      const newSections = [...(currentTutorial.biteSizeSections || [])];
-                      newSections[index] = {
-                        ...section,
-                        codeSnippet: { ...section.codeSnippet, language: e.target.value }
-                      };
-                      setCurrentTutorial({ ...currentTutorial, biteSizeSections: newSections });
-                    }}
-                  />
-                </div>
-                <div>
-                  <Label>Code</Label>
-                  <Textarea
-                    value={section.codeSnippet?.code}
-                    onChange={e => {
-                      const newSections = [...(currentTutorial.biteSizeSections || [])];
-                      newSections[index] = {
-                        ...section,
-                        codeSnippet: { ...section.codeSnippet, code: e.target.value }
-                      };
-                      setCurrentTutorial({ ...currentTutorial, biteSizeSections: newSections });
-                    }}
-                    rows={4}
-                  />
+              <div>
+                <Label>Code Snippets</Label>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-sm text-gray-500">Language</Label>
+                      <Input
+                        value={section.codeSnippet?.language || ''}
+                        onChange={e => {
+                          const newSections = [...(currentTutorial.biteSizeSections || [])];
+                          newSections[index] = {
+                            ...section,
+                            codeSnippet: {
+                              ...section.codeSnippet,
+                              language: e.target.value
+                            }
+                          };
+                          setCurrentTutorial({ ...currentTutorial, biteSizeSections: newSections });
+                        }}
+                        placeholder="e.g., javascript, python, etc."
+                      />
+                    </div>
+                    <div className="flex items-end">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full"
+                        onClick={() => {
+                          const newSections = [...(currentTutorial.biteSizeSections || [])];
+                          const currentSnippets = section.codeSnippet?.code ? section.codeSnippet.code.split('---SPLIT---') : [];
+                          const currentExplanations = section.codeSnippet?.explanations || [];
+                          newSections[index] = {
+                            ...section,
+                            codeSnippet: {
+                              ...section.codeSnippet,
+                              code: [...currentSnippets, ''].join('---SPLIT---'),
+                              explanations: [...currentExplanations, '']
+                            }
+                          };
+                          setCurrentTutorial({ ...currentTutorial, biteSizeSections: newSections });
+                        }}
+                      >
+                        <FileCode className="h-4 w-4 mr-2" />
+                        Add New Code Snippet
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  {/* Code Snippets List */}
+                  <div className="space-y-4">
+                    {(section.codeSnippet?.code ? section.codeSnippet.code.split('---SPLIT---') : ['']).map((snippet, snippetIndex) => (
+                      <div key={snippetIndex} className="relative border rounded-lg p-4 bg-white">
+                        <div className="flex justify-between items-center mb-2">
+                          <Label className="text-sm font-medium">Snippet {snippetIndex + 1}</Label>
+                          {snippetIndex > 0 && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0 text-red-500 hover:text-red-700"
+                              onClick={() => {
+                                const newSections = [...(currentTutorial.biteSizeSections || [])];
+                                const currentSnippets = section.codeSnippet?.code ? section.codeSnippet.code.split('---SPLIT---') : [];
+                                const currentExplanations = section.codeSnippet?.explanations || [];
+                                const updatedSnippets = currentSnippets.filter((_, i) => i !== snippetIndex);
+                                const updatedExplanations = currentExplanations.filter((_, i) => i !== snippetIndex);
+                                newSections[index] = {
+                                  ...section,
+                                  codeSnippet: {
+                                    ...section.codeSnippet,
+                                    code: updatedSnippets.join('---SPLIT---'),
+                                    explanations: updatedExplanations
+                                  }
+                                };
+                                setCurrentTutorial({ ...currentTutorial, biteSizeSections: newSections });
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                        <div className="space-y-4">
+                          <div>
+                            <Label className="text-sm text-gray-500">Code</Label>
+                            <Textarea
+                              value={snippet}
+                              onChange={e => {
+                                const newSections = [...(currentTutorial.biteSizeSections || [])];
+                                const currentSnippets = section.codeSnippet?.code ? section.codeSnippet.code.split('---SPLIT---') : [];
+                                currentSnippets[snippetIndex] = e.target.value;
+                                newSections[index] = {
+                                  ...section,
+                                  codeSnippet: {
+                                    ...section.codeSnippet,
+                                    code: currentSnippets.join('---SPLIT---')
+                                  }
+                                };
+                                setCurrentTutorial({ ...currentTutorial, biteSizeSections: newSections });
+                              }}
+                              placeholder="Enter your code here..."
+                              className="font-mono min-h-[100px]"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-sm text-gray-500">Code Explanation</Label>
+                            <Textarea
+                              value={section.codeSnippet?.explanations?.[snippetIndex] || ''}
+                              onChange={e => {
+                                const newSections = [...(currentTutorial.biteSizeSections || [])];
+                                const currentExplanations = section.codeSnippet?.explanations || [];
+                                const updatedExplanations = [...currentExplanations];
+                                updatedExplanations[snippetIndex] = e.target.value;
+                                newSections[index] = {
+                                  ...section,
+                                  codeSnippet: {
+                                    ...section.codeSnippet,
+                                    explanations: updatedExplanations
+                                  }
+                                };
+                                setCurrentTutorial({ ...currentTutorial, biteSizeSections: newSections });
+                              }}
+                              placeholder="Explain what this code does..."
+                              className="min-h-[80px]"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Preview Section */}
+                  {section.codeSnippet?.code && (
+                    <div className="mt-4 p-4 bg-gray-50 rounded-lg border">
+                      <Label className="text-sm text-gray-500 mb-2">Preview</Label>
+                      <div className="space-y-6">
+                        {section.codeSnippet.code.split('---SPLIT---').map((snippet, snippetIndex) => (
+                          snippet && (
+                            <div key={snippetIndex} className="space-y-4">
+                              <div className="bg-gray-800 text-gray-100 p-4 rounded-lg overflow-x-auto">
+                                <div className="text-xs text-gray-400 mb-2">Snippet {snippetIndex + 1}</div>
+                                <pre>
+                                  <code className={`language-${section.codeSnippet.language || 'plaintext'}`}>
+                                    {snippet}
+                                  </code>
+                                </pre>
+                              </div>
+                              {section.codeSnippet.explanations?.[snippetIndex] && (
+                                <div className="bg-white p-4 rounded-lg border">
+                                  <div className="text-sm font-medium text-gray-700 mb-2">Explanation</div>
+                                  <div className="prose prose-sm max-w-none">
+                                    <ReactMarkdown>{section.codeSnippet.explanations[snippetIndex]}</ReactMarkdown>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
               <div>
@@ -1264,7 +1398,7 @@ export default function TextTutorials() {
                 contentMd: '',
                 humorTip: '',
                 mnemonic: '',
-                codeSnippet: { language: '', code: '' },
+                codeSnippet: { language: '', code: '', explanations: [] },
                 challengePrompt: '',
                 sectionQuiz: [],
                 playgroundEmbedId: '',
@@ -2032,8 +2166,8 @@ export default function TextTutorials() {
                   <div className="flex flex-wrap gap-2">
                     {selectedTutorial.learningObjectives.map((obj, i) => (
                       <Badge key={i} variant="secondary" className="text-xs bg-blue-100 text-blue-700">{obj}</Badge>
-                    ))}
-                  </div>
+                ))}
+              </div>
                 </div>
               )}
               {/* Key Takeaways */}
@@ -2044,7 +2178,7 @@ export default function TextTutorials() {
                     {selectedTutorial.keyTakeaways.map((obj, i) => (
                       <Badge key={i} variant="secondary" className="text-xs bg-green-100 text-green-700">{obj}</Badge>
                     ))}
-                  </div>
+              </div>
                 </div>
               )}
               {/* Fun Fact */}
@@ -2053,7 +2187,7 @@ export default function TextTutorials() {
                   <h3 className="font-semibold text-base text-indigo-700 mb-1">Fun Fact</h3>
                   <div className="prose prose-sm max-w-none bg-white rounded p-3 border shadow-sm">
                     <ReactMarkdown>{selectedTutorial.funFact}</ReactMarkdown>
-                  </div>
+              </div>
                 </div>
               )}
               {/* Reflection Prompt */}
@@ -2112,7 +2246,7 @@ export default function TextTutorials() {
               <div className="my-6 border-t" />
               {/* Bite Size Sections */}
               {selectedTutorial.biteSizeSections && selectedTutorial.biteSizeSections.length > 0 && (
-                <div className="mb-6">
+              <div className="mb-6">
                   <h3 className="font-semibold text-lg flex items-center gap-2 mb-2 text-indigo-700">Bite Size Sections</h3>
                   <div className="space-y-4">
                     {selectedTutorial.biteSizeSections.map((section, idx) => (
@@ -2124,8 +2258,8 @@ export default function TextTutorials() {
                             <span className="font-semibold">Content:</span>
                             <div className="prose prose-sm max-w-none bg-gray-50 rounded p-2 border mt-1">
                               <ReactMarkdown>{section.contentMd}</ReactMarkdown>
-                            </div>
-                          </div>
+                </div>
+              </div>
                         )}
                         {section.humorTip && (
                           <div className="mb-2"><span className="font-semibold">Humor Tip:</span> {section.humorTip}</div>
