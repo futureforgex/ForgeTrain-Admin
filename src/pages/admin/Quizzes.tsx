@@ -50,6 +50,7 @@ interface QuizSettings {
   retakePolicy: 'none' | 'once' | 'unlimited';
   visibility: 'public' | 'unlisted' | 'private';
   publishDate?: Date;
+  xpPoints: number;
 }
 
 export default function Quizzes() {
@@ -70,7 +71,7 @@ export default function Quizzes() {
     description: '',
     category: '',
     totalTime: 30,
-    passingScore: 60,
+    passingScore: 80,
     tags: [],
     questions: [],
     settings: {
@@ -79,6 +80,7 @@ export default function Quizzes() {
       showCorrectAnswers: true,
       retakePolicy: 'none',
       visibility: 'public',
+      xpPoints: 5,
     },
     status: 'draft',
   });
@@ -266,7 +268,7 @@ export default function Quizzes() {
               description: '',
               category: '',
               totalTime: 30,
-              passingScore: 60,
+              passingScore: 80,
               tags: [],
               questions: [],
               settings: {
@@ -275,6 +277,7 @@ export default function Quizzes() {
                 showCorrectAnswers: true,
                 retakePolicy: 'none',
                 visibility: 'public',
+                xpPoints: 5,
               },
               status: 'draft',
             });
@@ -633,6 +636,22 @@ export default function Quizzes() {
                           </SelectContent>
                         </Select>
                       </div>
+                      <div>
+                        <Label>XP Points</Label>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="number"
+                            min="0"
+                            value={currentQuiz.settings?.xpPoints || 5}
+                            onChange={(e) => setCurrentQuiz({
+                              ...currentQuiz,
+                              settings: { ...currentQuiz.settings, xpPoints: parseInt(e.target.value) || 5 }
+                            })}
+                            className="w-32"
+                          />
+                          <span className="text-sm text-gray-500">points awarded on completion</span>
+                        </div>
+                      </div>
                     </div>
                   </TabsContent>
                 </div>
@@ -666,6 +685,7 @@ export default function Quizzes() {
               <span>Questions: <b>{selectedQuiz.questions.length}</b></span>
               <span>Total Time: <b>{selectedQuiz.totalTime} min</b></span>
               <span>Passing Score: <b>{selectedQuiz.passingScore}%</b></span>
+              <span>XP Points: <b>{selectedQuiz.settings.xpPoints}</b></span>
               <span>Status: <b className={selectedQuiz.status === 'published' ? 'text-green-600' : 'text-yellow-600'}>{selectedQuiz.status}</b></span>
             </div>
             <div className="mb-4">
