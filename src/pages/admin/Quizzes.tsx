@@ -487,44 +487,79 @@ export default function Quizzes() {
 
                   <TabsContent value="questions">
                     <div className="space-y-4">
-                      {currentQuiz.questions?.map((question, index) => (
-                        <div key={question.id} className="flex items-center gap-2 p-4 border rounded-lg">
-                          <GripVertical className="h-5 w-5 text-gray-400 cursor-move" />
-                          <div className="flex-1">
-                            <div className="font-medium">{index + 1}. {question.stem}</div>
-                            <div className="text-sm text-gray-500">
-                              {question.type.toUpperCase()} • {question.points} points
-                            </div>
-                          </div>
-                          <div className="flex gap-2">
-                            <Button 
-                              size="sm" 
-                              variant="ghost"
-                              onClick={() => handleEditQuestion(index)}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button 
-                              size="sm" 
-                              variant="ghost"
-                              onClick={() => handleDeleteQuestion(index)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="text-sm text-gray-500">
+                          Total Questions: {currentQuiz.questions?.length || 0}
                         </div>
-                      ))}
-                      <Button 
-                        variant="outline" 
-                        className="w-full"
-                        onClick={() => {
-                          setEditingQuestionIndex(null);
-                          setIsQuestionFormOpen(true);
-                        }}
-                      >
-                        <Plus className="h-4 w-4 mr-2" />
-                        Add Question
-                      </Button>
+                        <Button 
+                          variant="outline" 
+                          onClick={() => {
+                            setEditingQuestionIndex(null);
+                            setIsQuestionFormOpen(true);
+                          }}
+                        >
+                          <Plus className="h-4 w-4 mr-2" />
+                          Add Question
+                        </Button>
+                      </div>
+                      <ScrollArea className="h-[400px] pr-4">
+                        <div className="space-y-3">
+                          {currentQuiz.questions?.map((question, index) => (
+                            <div 
+                              key={question.id} 
+                              className="flex items-start gap-3 p-4 border rounded-lg bg-white hover:bg-gray-50 transition-colors"
+                            >
+                              <div className="flex items-center gap-2 pt-1">
+                                <GripVertical className="h-5 w-5 text-gray-400 cursor-move" />
+                                <div className="text-sm font-medium text-gray-500">{index + 1}</div>
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="font-medium mb-1 line-clamp-2">{question.stem}</div>
+                                <div className="flex flex-wrap gap-2 text-sm text-gray-500">
+                                  <Badge variant="secondary" className="capitalize">
+                                    {question.type}
+                                  </Badge>
+                                  <span>•</span>
+                                  <span>{question.points} points</span>
+                                  {question.timeLimit && (
+                                    <>
+                                      <span>•</span>
+                                      <span>{question.timeLimit}s time limit</span>
+                                    </>
+                                  )}
+                                </div>
+                                {question.explanation && (
+                                  <div className="mt-2 text-sm text-gray-600 line-clamp-2">
+                                    {question.explanation}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="flex gap-2 pt-1">
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost"
+                                  onClick={() => handleEditQuestion(index)}
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost"
+                                  onClick={() => handleDeleteQuestion(index)}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                          {(!currentQuiz.questions || currentQuiz.questions.length === 0) && (
+                            <div className="text-center py-8 text-gray-500 border rounded-lg bg-gray-50">
+                              <p>No questions added yet</p>
+                              <p className="text-sm mt-1">Click "Add Question" to create your first question</p>
+                            </div>
+                          )}
+                        </div>
+                      </ScrollArea>
                     </div>
                   </TabsContent>
 

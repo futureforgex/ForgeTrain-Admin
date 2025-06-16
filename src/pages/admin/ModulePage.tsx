@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Plus, MoreVertical, X } from 'lucide-react';
+import { Search, Plus, MoreVertical, X, Archive, Copy, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -7,13 +7,15 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { ModuleList } from '@/components/modules/ModuleList';
 import { ModuleEditor } from '@/components/modules/ModuleEditor';
 import { ModuleFilters } from '@/components/modules/ModuleFilters';
 import { AddLessonModal } from '@/components/modules/AddLessonModal';
-import { collection, addDoc, getDocs } from "firebase/firestore";
+import { collection, addDoc, getDocs, doc, deleteDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { toast } from 'sonner';
 
 const ModulePage = () => {
   const [isEditorOpen, setIsEditorOpen] = useState(false);
@@ -23,20 +25,28 @@ const ModulePage = () => {
   const [lessons, setLessons] = useState([]);
   const [modules, setModules] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
-    const fetchModules = async () => {
-      setLoading(true);
+    fetchModules();
+  }, []);
+
+  const fetchModules = async () => {
+    setLoading(true);
+    try {
       const querySnapshot = await getDocs(collection(db, "modules"));
       const modulesData = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
       setModules(modulesData);
+    } catch (error) {
+      console.error('Error fetching modules:', error);
+      toast.error('Failed to load modules');
+    } finally {
       setLoading(false);
-    };
-    fetchModules();
-  }, []);
+    }
+  };
 
   const handleAddModule = () => {
     setSelectedModule(null);
@@ -48,6 +58,75 @@ const ModulePage = () => {
     setIsEditorOpen(true);
   };
 
+  const handleCloneModule = async (module) => {
+    try {
+      // Create a new module object without the id
+      const { id, created_at, updated_at, ...moduleData } = module;
+      
+      // Add clone suffix to title
+      const clonedModule = {
+        ...moduleData,
+        title: `${moduleData.title} (Clone)`,
+        created_at: serverTimestamp(),
+        updated_at: serverTimestamp(),
+        status: 'draft',
+        is_archived: false
+      };
+
+      // Add the new module to Firestore
+      const docRef = await addDoc(collection(db, "modules"), clonedModule);
+      
+      // Update local state
+      setModules(prev => [...prev, { id: docRef.id, ...clonedModule }]);
+      
+      toast.success('Module cloned successfully');
+    } catch (error) {
+      console.error('Error cloning module:', error);
+      toast.error('Failed to clone module');
+    }
+  };
+
+  const handleArchiveModule = async (module) => {
+    try {
+      const moduleRef = doc(db, "modules", module.id);
+      await updateDoc(moduleRef, {
+        is_archived: !module.is_archived,
+        updated_at: serverTimestamp()
+      });
+
+      // Update local state
+      setModules(prev => prev.map(m => 
+        m.id === module.id 
+          ? { ...m, is_archived: !m.is_archived }
+          : m
+      ));
+
+      toast.success(module.is_archived ? 'Module unarchived' : 'Module archived');
+    } catch (error) {
+      console.error('Error archiving module:', error);
+      toast.error('Failed to archive module');
+    }
+  };
+
+  const handleDeleteModule = async (module) => {
+    if (!window.confirm('Are you sure you want to delete this module? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      const moduleRef = doc(db, "modules", module.id);
+      await deleteDoc(moduleRef);
+
+      // Update local state
+      setModules(prev => prev.filter(m => m.id !== module.id));
+      
+      toast.success('Module deleted successfully');
+    } catch (error) {
+      console.error('Error deleting module:', error);
+      toast.error('Failed to delete module');
+    }
+  };
+
   const handleAddLesson = (resource, type) => {
     setLessons([
       ...lessons,
@@ -56,11 +135,16 @@ const ModulePage = () => {
         title: resource.title || resource.name,
         type,
         status: 'draft',
-        resourceRef: resource, // store the full resource or a reference
+        resourceRef: resource,
       }
     ]);
     setAddLessonOpen(false);
   };
+
+  const filteredModules = modules.filter(module => 
+    module.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    module.description?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -81,6 +165,8 @@ const ModulePage = () => {
               <Input
                 placeholder="Search modules..."
                 className="pl-10 w-full sm:w-64"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
             <Button onClick={handleAddModule} className="w-full sm:w-auto">
@@ -114,12 +200,15 @@ const ModulePage = () => {
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 xl:gap-8 relative">
           <div className="xl:col-span-2">
             <ModuleList
-              modules={modules}
+              modules={filteredModules}
               loading={loading}
               onEditModule={handleEditModule}
               onViewModule={() => {}}
               viewMode={viewMode}
               onViewModeChange={setViewMode}
+              onCloneModule={handleCloneModule}
+              onArchiveModule={handleArchiveModule}
+              onDeleteModule={handleDeleteModule}
             />
           </div>
 
@@ -141,6 +230,7 @@ const ModulePage = () => {
                   <ModuleEditor
                     module={selectedModule}
                     onClose={() => setIsEditorOpen(false)}
+                    onSave={fetchModules}
                   />
                 </div>
               </div>

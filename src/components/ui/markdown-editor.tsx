@@ -2,7 +2,31 @@ import * as React from "react"
 import { cn } from "@/lib/utils"
 import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
-import { Bold, Italic, List, ListOrdered, Code, Link, Image as ImageIcon, Heading1, Heading2, Heading3, Table, FileCode } from "lucide-react"
+import { 
+  Bold, 
+  Italic, 
+  List, 
+  ListOrdered, 
+  Code, 
+  Link, 
+  Image as ImageIcon, 
+  Heading1, 
+  Heading2, 
+  Heading3, 
+  Table, 
+  FileCode,
+  Quote,
+  CheckSquare,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  Strikethrough,
+  Underline,
+  Highlighter,
+  SeparatorHorizontal,
+  Subscript,
+  Superscript
+} from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import { Label } from "@/components/ui/label"
 
@@ -46,6 +70,53 @@ export function MarkdownEditor({
     }, 0)
   }
 
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    if (onPaste) {
+      onPaste(e)
+      return
+    }
+
+    // Handle ChatGPT-style formatting
+    const text = e.clipboardData.getData('text/plain')
+    if (text) {
+      e.preventDefault()
+      
+      // Convert code blocks
+      let formattedText = text.replace(/```(\w*)\n([\s\S]*?)```/g, (match, lang, code) => {
+        return `\`\`\`${lang}\n${code.trim()}\n\`\`\``
+      })
+
+      // Convert inline code
+      formattedText = formattedText.replace(/`([^`]+)`/g, '`$1`')
+
+      // Convert lists
+      formattedText = formattedText.replace(/^[-*]\s+(.+)$/gm, '- $1')
+      formattedText = formattedText.replace(/^\d+\.\s+(.+)$/gm, '1. $1')
+
+      // Convert headers
+      formattedText = formattedText.replace(/^(#{1,6})\s+(.+)$/gm, '$1 $2')
+
+      // Convert bold and italic
+      formattedText = formattedText.replace(/\*\*(.+?)\*\*/g, '**$1**')
+      formattedText = formattedText.replace(/\*(.+?)\*/g, '*$1*')
+
+      // Convert blockquotes
+      formattedText = formattedText.replace(/^>\s+(.+)$/gm, '> $1')
+
+      // Convert horizontal rules
+      formattedText = formattedText.replace(/^[-*_]{3,}$/gm, '---')
+
+      // Insert the formatted text
+      const textarea = textareaRef.current
+      if (textarea) {
+        const start = textarea.selectionStart
+        const end = textarea.selectionEnd
+        const newText = value.substring(0, start) + formattedText + value.substring(end)
+        onChange(newText)
+      }
+    }
+  }
+
   const insertTable = () => {
     const tableTemplate = `| Header 1 | Header 2 | Header 3 |
 |----------|----------|----------|
@@ -79,37 +150,85 @@ export function MarkdownEditor({
     onChange(newText)
   }
 
+  const insertChecklist = () => {
+    const textarea = textareaRef.current
+    if (!textarea) return
+    const start = textarea.selectionStart
+    const end = textarea.selectionEnd
+    const text = value
+    const beforeText = text.substring(0, start)
+    const selectedText = text.substring(start, end)
+    const afterText = text.substring(end)
+    
+    // Convert selected text into checklist items
+    const checklistText = selectedText
+      .split('\n')
+      .map(line => line.trim() ? `- [ ] ${line}` : '')
+      .join('\n')
+    
+    const newText = beforeText + checklistText + afterText
+    onChange(newText)
+  }
+
+  const insertBlockquote = () => {
+    const textarea = textareaRef.current
+    if (!textarea) return
+    const start = textarea.selectionStart
+    const end = textarea.selectionEnd
+    const text = value
+    const beforeText = text.substring(0, start)
+    const selectedText = text.substring(start, end)
+    const afterText = text.substring(end)
+    
+    // Convert selected text into blockquote
+    const blockquoteText = selectedText
+      .split('\n')
+      .map(line => line.trim() ? `> ${line}` : '')
+      .join('\n')
+    
+    const newText = beforeText + blockquoteText + afterText
+    onChange(newText)
+  }
+
   const toolbar = [
     { icon: <Bold className="h-4 w-4" />, action: () => insertText("**", "**"), tooltip: "Bold" },
     { icon: <Italic className="h-4 w-4" />, action: () => insertText("*", "*"), tooltip: "Italic" },
+    { icon: <Underline className="h-4 w-4" />, action: () => insertText("__", "__"), tooltip: "Underline" },
+    { icon: <Strikethrough className="h-4 w-4" />, action: () => insertText("~~", "~~"), tooltip: "Strikethrough" },
+    { icon: <Highlighter className="h-4 w-4" />, action: () => insertText("==", "=="), tooltip: "Highlight" },
+    { icon: <Subscript className="h-4 w-4" />, action: () => insertText("<sub>", "</sub>"), tooltip: "Subscript" },
+    { icon: <Superscript className="h-4 w-4" />, action: () => insertText("<sup>", "</sup>"), tooltip: "Superscript" },
     { icon: <Code className="h-4 w-4" />, action: () => insertText("`", "`"), tooltip: "Inline Code" },
     { icon: <FileCode className="h-4 w-4" />, action: insertCodeBlock, tooltip: "Code Block" },
-      { icon: <Heading1 className="h-4 w-4" />, action: () => insertText("# "), tooltip: "Heading 1" },
-      { icon: <Heading2 className="h-4 w-4" />, action: () => insertText("## "), tooltip: "Heading 2" },
-      { icon: <Heading3 className="h-4 w-4" />, action: () => insertText("### "), tooltip: "Heading 3" },
+    { icon: <Heading1 className="h-4 w-4" />, action: () => insertText("# "), tooltip: "Heading 1" },
+    { icon: <Heading2 className="h-4 w-4" />, action: () => insertText("## "), tooltip: "Heading 2" },
+    { icon: <Heading3 className="h-4 w-4" />, action: () => insertText("### "), tooltip: "Heading 3" },
     { icon: <List className="h-4 w-4" />, action: insertBulletList, tooltip: "Bullet List" },
-      { icon: <ListOrdered className="h-4 w-4" />, action: () => insertText("1. "), tooltip: "Numbered List" },
+    { icon: <ListOrdered className="h-4 w-4" />, action: () => insertText("1. "), tooltip: "Numbered List" },
+    { icon: <CheckSquare className="h-4 w-4" />, action: insertChecklist, tooltip: "Checklist" },
+    { icon: <Quote className="h-4 w-4" />, action: insertBlockquote, tooltip: "Blockquote" },
     { icon: <Table className="h-4 w-4" />, action: insertTable, tooltip: "Insert Table" },
-      { icon: <Link className="h-4 w-4" />, action: () => { const url = prompt("Enter URL:"); if (url) insertText("[", `](${url})`) }, tooltip: "Insert Link" },
-      { icon: <ImageIcon className="h-4 w-4" />, action: () => { const url = prompt("Enter image URL:"); if (url) insertText("![", `](${url})`) }, tooltip: "Insert Image" },
+    { icon: <SeparatorHorizontal className="h-4 w-4" />, action: () => insertText("\n---\n"), tooltip: "Horizontal Rule" },
+    { icon: <Link className="h-4 w-4" />, action: () => { const url = prompt("Enter URL:"); if (url) insertText("[", `](${url})`) }, tooltip: "Insert Link" },
+    { icon: <ImageIcon className="h-4 w-4" />, action: () => { const url = prompt("Enter image URL:"); if (url) insertText("![", `](${url})`) }, tooltip: "Insert Image" },
   ]
 
   return (
     <div className={cn("border rounded-lg bg-white shadow", className)}>
       {/* Toolbar */}
-      <div className="flex items-center gap-1 p-2 border-b bg-gray-50">
+      <div className="flex flex-wrap items-center gap-1 p-2 border-b bg-gray-50">
         {toolbar.map((item, i) => (
-              <Button
+          <Button
             key={i}
-                variant="ghost"
-                size="sm"
-                className="h-8 w-8 p-0"
-                onClick={item.action}
-                title={item.tooltip}
-                tabIndex={0}
-              >
-                {item.icon}
-              </Button>
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0"
+            onClick={item.action}
+            title={item.tooltip}
+            tabIndex={0}
+          >
+            {item.icon}
+          </Button>
         ))}
         <div className="flex-1" />
         <Button
@@ -127,17 +246,17 @@ export function MarkdownEditor({
           <ReactMarkdown>{value}</ReactMarkdown>
         </div>
       ) : (
-          <Textarea
-            ref={textareaRef}
-            value={value}
+        <Textarea
+          ref={textareaRef}
+          value={value}
           onChange={e => onChange(e.target.value)}
-            placeholder={placeholder}
+          onPaste={handlePaste}
+          placeholder={placeholder}
           className="min-h-[120px] font-mono border-0 rounded-none resize-none focus-visible:ring-2 focus-visible:ring-indigo-300 bg-white text-gray-900 p-4 text-base"
-            spellCheck={true}
-            autoCorrect="on"
-            autoCapitalize="sentences"
+          spellCheck={true}
+          autoCorrect="on"
+          autoCapitalize="sentences"
           name={name}
-          onPaste={onPaste}
         />
       )}
     </div>
