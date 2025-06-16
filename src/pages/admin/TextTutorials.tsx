@@ -625,14 +625,14 @@ export default function TextTutorials() {
         toast({
         title: "Success",
         description: "Tutorial deleted successfully",
-      });
+        });
     } catch (error) {
       console.error('Error deleting tutorial:', error);
         toast({
         title: "Error",
         description: "Failed to delete tutorial",
         variant: "destructive",
-      });
+        });
     } finally {
       setDeletingId(null);
     }
@@ -1744,7 +1744,7 @@ export default function TextTutorials() {
                   Create your first tutorial
                 </Button>
               </div>
-            ) : (
+          ) : (
               getFilteredTutorials().map(tutorial => (
                 <div key={tutorial.id} className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow p-5 flex flex-col gap-3 border border-gray-100">
                   <div className="flex items-start justify-between">

@@ -177,98 +177,104 @@ export function AddLessonModal({ open, onClose, onSelect, moduleId }: AddLessonM
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl">
-        <DialogTitle>Add Learning Resource</DialogTitle>
-        <DialogDescription>
-          Select a learning resource to add to your module. You can search and filter resources by type.
-        </DialogDescription>
-        
-        <div className="space-y-4">
-          {error && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertTitle>Error</AlertTitle>
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
+      <DialogContent className="max-w-3xl p-0">
+        <div className="sticky top-0 z-10 bg-white px-6 pt-6 pb-2 border-b">
+          <DialogTitle>Add Learning Resource</DialogTitle>
+          <DialogDescription>
+            Select a learning resource to add to your module. You can search and filter resources by type.
+          </DialogDescription>
+        </div>
+        <div className="px-6 pb-6 pt-2 max-h-[70vh] overflow-y-auto">
+          <div className="space-y-4">
+            {error && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Error</AlertTitle>
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
 
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
-            <Input
-              placeholder="Search resources..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
-            />
-          </div>
-
-          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as Resource['type'])}>
-            <TabsList className="grid grid-cols-5">
-              {resources.map(group => (
-                <TabsTrigger key={group.type} value={group.type} className="flex items-center gap-2">
-                  {group.icon}
-                  {group.label}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-
-        {loading ? (
-              <div className="py-8 text-center text-gray-500">Loading resources...</div>
-            ) : error ? (
-              <div className="py-8 text-center">
-                <Button variant="outline" onClick={fetchResources}>
-                  Retry
-                </Button>
-              </div>
-        ) : (
-          resources.map(group => (
-                <TabsContent key={group.type} value={group.type} className="mt-4">
-                  {filteredResources.find(r => r.type === group.type)?.items.length === 0 ? (
-                    <div className="text-center py-8 text-gray-500">
-                      No {group.label.toLowerCase()} found
-                    </div>
-                  ) : (
-                    <div className="grid gap-4">
-                      {filteredResources
-                        .find(r => r.type === group.type)
-                        ?.items.map(item => (
-                          <div
-                            key={item.id}
-                            className="flex items-start justify-between p-4 border rounded-lg hover:bg-gray-50"
-                          >
-                            <div className="space-y-1">
-                              <h4 className="font-medium">{item.title}</h4>
-                              {item.description && (
-                                <p className="text-sm text-gray-500">{item.description}</p>
-                              )}
-                              <div className="flex flex-wrap gap-2">
-                                {item.difficulty && (
-                                  <Badge variant="outline">{item.difficulty}</Badge>
-                                )}
-                                {item.duration && (
-                                  <Badge variant="outline">{item.duration} min</Badge>
-                                )}
-                                {item.tags?.map(tag => (
-                                  <Badge key={tag} variant="secondary">
-                                    {tag}
-                                  </Badge>
-                                ))}
-                              </div>
-                            </div>
-                            <Button
-                              size="sm"
-                              onClick={() => onSelect(item, group.type)}
-                            >
-                      Add
-                    </Button>
-                          </div>
-                ))}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+              <Input
+                placeholder="Search resources..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+              />
             </div>
-                  )}
-                </TabsContent>
-          ))
-        )}
-          </Tabs>
+
+            <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as Resource['type'])}>
+              <TabsList className="grid grid-cols-5">
+                {resources.map(group => (
+                  <TabsTrigger key={group.type} value={group.type} className="flex items-center gap-2">
+                    {group.icon}
+                    {group.label}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+
+              {loading ? (
+                <div className="py-8 text-center text-gray-500">Loading resources...</div>
+              ) : error ? (
+                <div className="py-8 text-center">
+                  <Button variant="outline" onClick={fetchResources}>
+                    Retry
+                  </Button>
+                </div>
+              ) : (
+                resources.map(group => (
+                  <TabsContent key={group.type} value={group.type} className="mt-4">
+                    {filteredResources.find(r => r.type === group.type)?.items.length === 0 ? (
+                      <div className="text-center py-8 text-gray-500">
+                        No {group.label.toLowerCase()} found
+                      </div>
+                    ) : (
+                      <div className="grid gap-4">
+                        {filteredResources
+                          .find(r => r.type === group.type)
+                          ?.items.map(item => (
+                            <div
+                              key={item.id}
+                              className="flex items-start justify-between p-4 border rounded-lg hover:bg-gray-50"
+                            >
+                              <div className="space-y-1">
+                                <h4 className="font-medium">{item.title}</h4>
+                                {item.description && (
+                                  <p className="text-sm text-gray-500">{item.description}</p>
+                                )}
+                                <div className="flex flex-wrap gap-2">
+                                  {item.difficulty && (
+                                    <Badge variant="outline">{item.difficulty}</Badge>
+                                  )}
+                                  {item.duration && (
+                                    <Badge variant="outline">{item.duration} min</Badge>
+                                  )}
+                                  {item.tags?.map(tag => (
+                                    <Badge key={tag} variant="secondary">
+                                      {tag}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              </div>
+                              <Button
+                                size="sm"
+                                onClick={() => {
+                                  onSelect(item, group.type);
+                                  onClose();
+                                }}
+                              >
+                                Add
+                              </Button>
+                            </div>
+                          ))}
+                      </div>
+                    )}
+                  </TabsContent>
+                ))
+              )}
+            </Tabs>
+          </div>
         </div>
       </DialogContent>
     </Dialog>
