@@ -81,39 +81,53 @@ export function MarkdownEditor({
     if (text) {
       e.preventDefault()
       
-      // Convert code blocks
-      let formattedText = text.replace(/```(\w*)\n([\s\S]*?)```/g, (match, lang, code) => {
-        return `\`\`\`${lang}\n${code.trim()}\n\`\`\``
-      })
-
-      // Convert inline code
-      formattedText = formattedText.replace(/`([^`]+)`/g, '`$1`')
-
-      // Convert lists
-      formattedText = formattedText.replace(/^[-*]\s+(.+)$/gm, '- $1')
-      formattedText = formattedText.replace(/^\d+\.\s+(.+)$/gm, '1. $1')
-
-      // Convert headers
-      formattedText = formattedText.replace(/^(#{1,6})\s+(.+)$/gm, '$1 $2')
-
-      // Convert bold and italic
-      formattedText = formattedText.replace(/\*\*(.+?)\*\*/g, '**$1**')
-      formattedText = formattedText.replace(/\*(.+?)\*/g, '*$1*')
-
-      // Convert blockquotes
-      formattedText = formattedText.replace(/^>\s+(.+)$/gm, '> $1')
-
-      // Convert horizontal rules
-      formattedText = formattedText.replace(/^[-*_]{3,}$/gm, '---')
+      // Get cursor position
+      const textarea = textareaRef.current
+      if (!textarea) return
+      const start = textarea.selectionStart
+      const end = textarea.selectionEnd
+      
+      // Process the pasted text
+      let formattedText = text
+        // Handle code blocks with language
+        .replace(/```(\w*)\n([\s\S]*?)```/g, (match, lang, code) => {
+          return `\`\`\`${lang}\n${code.trim()}\n\`\`\``
+        })
+        // Handle code blocks without language
+        .replace(/```\n([\s\S]*?)```/g, (match, code) => {
+          return `\`\`\`\n${code.trim()}\n\`\`\``
+        })
+        // Handle inline code
+        .replace(/`([^`]+)`/g, '`$1`')
+        // Handle bullet lists
+        .replace(/^[-*]\s+(.+)$/gm, '- $1')
+        // Handle numbered lists
+        .replace(/^\d+\.\s+(.+)$/gm, '1. $1')
+        // Handle headers
+        .replace(/^(#{1,6})\s+(.+)$/gm, '$1 $2')
+        // Handle bold
+        .replace(/\*\*(.+?)\*\*/g, '**$1**')
+        // Handle italic
+        .replace(/\*(.+?)\*/g, '*$1*')
+        // Handle blockquotes
+        .replace(/^>\s+(.+)$/gm, '> $1')
+        // Handle horizontal rules
+        .replace(/^[-*_]{3,}$/gm, '---')
+        // Handle line breaks
+        .replace(/\n/g, '\n')
+        // Handle multiple spaces
+        .replace(/ {2,}/g, ' ')
 
       // Insert the formatted text
-      const textarea = textareaRef.current
-      if (textarea) {
-        const start = textarea.selectionStart
-        const end = textarea.selectionEnd
-        const newText = value.substring(0, start) + formattedText + value.substring(end)
-        onChange(newText)
-      }
+      const newText = value.substring(0, start) + formattedText + value.substring(end)
+      onChange(newText)
+
+      // Set cursor position after the pasted text
+      setTimeout(() => {
+        textarea.focus()
+        const newCursorPos = start + formattedText.length
+        textarea.setSelectionRange(newCursorPos, newCursorPos)
+      }, 0)
     }
   }
 

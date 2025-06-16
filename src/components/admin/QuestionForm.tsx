@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Switch } from '@/components/ui/switch';
+import { Plus, Trash2, GripVertical } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { X, Plus } from 'lucide-react';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface QuestionFormProps {
   onClose: () => void;
@@ -16,51 +17,153 @@ interface QuestionFormProps {
 
 export function QuestionForm({ onClose, onSave, initialData }: QuestionFormProps) {
   const [question, setQuestion] = useState({
-    type: initialData?.type || 'mcq',
-    stem: initialData?.stem || '',
-    options: initialData?.options || ['', '', '', ''],
-    correctAnswers: initialData?.correctAnswers || [],
-    explanation: initialData?.explanation || '',
-    mediaUrl: initialData?.mediaUrl || '',
-    points: initialData?.points || 1,
-    timeLimit: initialData?.timeLimit || 0,
-    tags: initialData?.tags || [],
+    type: 'mcq',
+    stem: '',
+    options: [''],
+    correctAnswers: [],
+    explanation: '',
+    points: 1,
+    timeLimit: 0,
+    tags: [],
+    matchingPairs: [
+      { id: '1', left: '', right: '' },
+      { id: '2', left: '', right: '' },
+      { id: '3', left: '', right: '' }
+    ],
+    shufflePairs: true,
+    ...initialData
   });
 
-  const handleOptionChange = (index: number, value: string) => {
-    const newOptions = [...question.options];
-    newOptions[index] = value;
-    setQuestion({ ...question, options: newOptions });
+  const handleAddMatchingPair = () => {
+    setQuestion(q => ({
+      ...q,
+      matchingPairs: [
+        ...q.matchingPairs,
+        { id: Date.now().toString(), left: '', right: '' }
+      ]
+    }));
   };
 
-  const handleCorrectAnswerChange = (value: string) => {
-    if (question.type === 'mcq') {
-      const newCorrectAnswers = question.correctAnswers.includes(value)
-        ? question.correctAnswers.filter(a => a !== value)
-        : [...question.correctAnswers, value];
-      setQuestion({ ...question, correctAnswers: newCorrectAnswers });
-    } else {
-      setQuestion({ ...question, correctAnswers: [value] });
-    }
+  const handleRemoveMatchingPair = (id: string) => {
+    setQuestion(q => ({
+      ...q,
+      matchingPairs: q.matchingPairs.filter(pair => pair.id !== id)
+    }));
   };
 
-  const handleAddOption = () => {
-    setQuestion({ ...question, options: [...question.options, ''] });
+  const handleUpdateMatchingPair = (id: string, field: 'left' | 'right', value: string) => {
+    setQuestion(q => ({
+      ...q,
+      matchingPairs: q.matchingPairs.map(pair =>
+        pair.id === id ? { ...pair, [field]: value } : pair
+      )
+    }));
   };
 
-  const handleRemoveOption = (index: number) => {
-    const newOptions = question.options.filter((_, i) => i !== index);
-    setQuestion({ ...question, options: newOptions });
-  };
+  const renderMatchingQuestionForm = () => (
+    <div className="space-y-4">
+      <div>
+        <Label>Question Text</Label>
+        <Textarea
+          value={question.stem}
+          onChange={e => setQuestion(q => ({ ...q, stem: e.target.value }))}
+          placeholder="Enter the matching question text..."
+          rows={3}
+        />
+      </div>
 
-  const handleAddTag = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      const input = e.target as HTMLInputElement;
-      const value = input.value.trim();
-      if (value && !question.tags.includes(value)) {
-        setQuestion({ ...question, tags: [...question.tags, value] });
-        input.value = '';
-      }
+      <div className="flex items-center justify-between">
+        <Label>Matching Pairs</Label>
+        <div className="flex items-center gap-2">
+          <Label htmlFor="shufflePairs" className="text-sm">Shuffle Pairs</Label>
+          <Switch
+            id="shufflePairs"
+            checked={question.shufflePairs}
+            onCheckedChange={checked => setQuestion(q => ({ ...q, shufflePairs: checked }))}
+          />
+        </div>
+      </div>
+
+      <ScrollArea className="h-[300px] pr-4">
+        <div className="space-y-3">
+          {question.matchingPairs.map((pair, index) => (
+            <div key={pair.id} className="flex items-start gap-3 p-4 border rounded-lg bg-gray-50">
+              <div className="flex items-center gap-2 pt-1">
+                <GripVertical className="h-5 w-5 text-gray-400 cursor-move" />
+                <div className="text-sm font-medium text-gray-500">{index + 1}</div>
+              </div>
+              <div className="flex-1 grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-sm">Left Item</Label>
+                  <Input
+                    value={pair.left}
+                    onChange={e => handleUpdateMatchingPair(pair.id, 'left', e.target.value)}
+                    placeholder="Enter left item..."
+                  />
+                </div>
+                <div>
+                  <Label className="text-sm">Right Item</Label>
+                  <Input
+                    value={pair.right}
+                    onChange={e => handleUpdateMatchingPair(pair.id, 'right', e.target.value)}
+                    placeholder="Enter right item..."
+                  />
+                </div>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => handleRemoveMatchingPair(pair.id)}
+                className="pt-1"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      </ScrollArea>
+
+      <Button
+        type="button"
+        variant="outline"
+        onClick={handleAddMatchingPair}
+        className="w-full"
+      >
+        <Plus className="h-4 w-4 mr-2" />
+        Add Matching Pair
+      </Button>
+
+      <div>
+        <Label>Points</Label>
+        <Input
+          type="number"
+          min="1"
+          value={question.points}
+          onChange={e => setQuestion(q => ({ ...q, points: parseInt(e.target.value) || 1 }))}
+          className="w-32"
+        />
+      </div>
+
+      <div>
+        <Label>Explanation (Optional)</Label>
+        <Textarea
+          value={question.explanation}
+          onChange={e => setQuestion(q => ({ ...q, explanation: e.target.value }))}
+          placeholder="Explain the correct matches..."
+          rows={3}
+        />
+      </div>
+    </div>
+  );
+
+  const renderQuestionForm = () => {
+    switch (question.type) {
+      case 'matching':
+        return renderMatchingQuestionForm();
+      // ... other question type forms ...
+      default:
+        return null;
     }
   };
 
@@ -74,184 +177,33 @@ export function QuestionForm({ onClose, onSave, initialData }: QuestionFormProps
           <Button variant="ghost" onClick={onClose}>×</Button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="p-6 flex-1 overflow-y-auto">
           <div className="space-y-6">
-            {/* Question Type */}
             <div>
               <Label>Question Type</Label>
-              <RadioGroup
+              <Select
                 value={question.type}
-                onValueChange={(value) => setQuestion({ ...question, type: value })}
-                className="flex gap-4 mt-2"
+                onValueChange={type => setQuestion(q => ({ ...q, type }))}
               >
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="mcq" id="mcq" />
-                  <Label htmlFor="mcq">Multiple Choice</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="true-false" id="true-false" />
-                  <Label htmlFor="true-false">True/False</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="fill-blank" id="fill-blank" />
-                  <Label htmlFor="fill-blank">Fill in the Blank</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="matching" id="matching" />
-                  <Label htmlFor="matching">Matching</Label>
-                </div>
-              </RadioGroup>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="mcq">Multiple Choice</SelectItem>
+                  <SelectItem value="true-false">True/False</SelectItem>
+                  <SelectItem value="fill-blank">Fill in the Blank</SelectItem>
+                  <SelectItem value="matching">Matching</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
-            {/* Question Stem */}
-            <div>
-              <Label>Question</Label>
-              <Textarea
-                value={question.stem}
-                onChange={(e) => setQuestion({ ...question, stem: e.target.value })}
-                placeholder="Enter your question..."
-                rows={4}
-              />
-            </div>
-
-            {/* Options */}
-            {question.type === 'mcq' && (
-              <div className="space-y-4">
-                <Label>Options</Label>
-                {question.options.map((option, index) => (
-                  <div key={index} className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={question.correctAnswers.includes(option)}
-                      onChange={() => handleCorrectAnswerChange(option)}
-                      className="h-4 w-4"
-                    />
-                    <Input
-                      value={option}
-                      onChange={(e) => handleOptionChange(index, e.target.value)}
-                      placeholder={`Option ${index + 1}`}
-                    />
-                    {question.options.length > 2 && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleRemoveOption(index)}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
-                ))}
-                <Button
-                  variant="outline"
-                  onClick={handleAddOption}
-                  className="w-full"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Option
-                </Button>
-              </div>
-            )}
-
-            {question.type === 'true-false' && (
-              <div className="space-y-4">
-                <Label>Correct Answer</Label>
-                <RadioGroup
-                  value={question.correctAnswers[0] || ''}
-                  onValueChange={(value) => handleCorrectAnswerChange(value)}
-                  className="flex gap-4"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="true" id="true" />
-                    <Label htmlFor="true">True</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="false" id="false" />
-                    <Label htmlFor="false">False</Label>
-                  </div>
-                </RadioGroup>
-              </div>
-            )}
-
-            {question.type === 'fill-blank' && (
-              <div>
-                <Label>Correct Answer</Label>
-                <Input
-                  value={question.correctAnswers[0] || ''}
-                  onChange={(e) => handleCorrectAnswerChange(e.target.value)}
-                  placeholder="Enter the correct answer..."
-                />
-              </div>
-            )}
-
-            {/* Explanation */}
-            <div>
-              <Label>Explanation (Optional)</Label>
-              <Textarea
-                value={question.explanation}
-                onChange={(e) => setQuestion({ ...question, explanation: e.target.value })}
-                placeholder="Explain the correct answer..."
-                rows={3}
-              />
-            </div>
-
-            {/* Points and Time Limit */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>Points</Label>
-                <Input
-                  type="number"
-                  value={question.points}
-                  onChange={(e) => setQuestion({ ...question, points: parseInt(e.target.value) })}
-                  min={1}
-                />
-              </div>
-              <div>
-                <Label>Time Limit (seconds, optional)</Label>
-                <Input
-                  type="number"
-                  value={question.timeLimit}
-                  onChange={(e) => setQuestion({ ...question, timeLimit: parseInt(e.target.value) })}
-                  min={0}
-                />
-              </div>
-            </div>
-
-            {/* Tags */}
-            <div>
-              <Label>Tags</Label>
-              <div className="flex flex-wrap gap-2 mt-2">
-                {question.tags.map((tag) => (
-                  <Badge key={tag} variant="secondary">
-                    {tag}
-                    <button
-                      className="ml-1"
-                      onClick={() => setQuestion({
-                        ...question,
-                        tags: question.tags.filter(t => t !== tag)
-                      })}
-                    >
-                      ×
-                    </button>
-                  </Badge>
-                ))}
-                <Input
-                  placeholder="Add tag..."
-                  className="w-32"
-                  onKeyDown={handleAddTag}
-                />
-              </div>
-            </div>
+            {renderQuestionForm()}
           </div>
         </div>
 
-        <div className="flex items-center justify-between p-6 border-t">
-          <Button variant="ghost" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button onClick={() => onSave(question)}>
-            Save Question
-          </Button>
+        <div className="flex items-center justify-end gap-2 p-6 border-t">
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button onClick={() => onSave(question)}>Save Question</Button>
         </div>
       </div>
     </div>

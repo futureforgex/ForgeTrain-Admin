@@ -59,6 +59,7 @@ export function AddCodeChallengePanel({ onClose, initialData }: AddCodeChallenge
     description: '',
     tags: [] as string[],
     difficulty: 'Easy',
+    xp_points: 10,
     
     // Constraints & Limits
     time_limit_ms: 1000,
@@ -236,16 +237,28 @@ export function AddCodeChallengePanel({ onClose, initialData }: AddCodeChallenge
                 className="min-h-[200px]"
               />
             </div>
-            <div>
-              <label className="block font-medium mb-1">Difficulty</label>
-              <Select value={form.difficulty} onValueChange={val => setForm(f => ({ ...f, difficulty: val }))}>
-                <SelectTrigger className="w-48">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {DIFFICULTIES.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
-                </SelectContent>
-              </Select>
+            <div className="flex gap-4">
+              <div>
+                <label className="block font-medium mb-1">Difficulty</label>
+                <Select value={form.difficulty} onValueChange={val => setForm(f => ({ ...f, difficulty: val }))}>
+                  <SelectTrigger className="w-48">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DIFFICULTIES.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="block font-medium mb-1">XP Points</label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={form.xp_points}
+                  onChange={e => setForm(f => ({ ...f, xp_points: parseInt(e.target.value) || 10 }))}
+                  className="w-32"
+                />
+              </div>
             </div>
             <div>
               <label className="block font-medium mb-1">Tags</label>
