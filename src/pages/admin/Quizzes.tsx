@@ -30,12 +30,6 @@ interface Quiz {
   createdAt: Date;
 }
 
-interface MatchingPair {
-  id: string;
-  left: string;
-  right: string;
-}
-
 interface Question {
   id: string;
   type: 'mcq' | 'true-false' | 'fill-blank' | 'matching';
@@ -47,8 +41,6 @@ interface Question {
   points: number;
   timeLimit?: number;
   tags: string[];
-  matchingPairs?: MatchingPair[];
-  shufflePairs?: boolean;
 }
 
 interface QuizSettings {
@@ -238,30 +230,12 @@ export default function Quizzes() {
     }
   };
 
-  const createMatchingQuestion = (): Question => ({
-    id: Date.now().toString(),
-    type: 'matching',
-    stem: '',
-    matchingPairs: [
-      { id: '1', left: '', right: '' },
-      { id: '2', left: '', right: '' },
-      { id: '3', left: '', right: '' }
-    ],
-    correctAnswers: [],
-    points: 1,
-    tags: [],
-    shufflePairs: true
-  });
-
   const handleAddQuestion = (question: Question) => {
     if (editingQuestionIndex !== null) {
       const newQuestions = [...(currentQuiz.questions || [])];
       newQuestions[editingQuestionIndex] = question;
       setCurrentQuiz({ ...currentQuiz, questions: newQuestions });
     } else {
-      if (question.type === 'matching' && !question.matchingPairs) {
-        question = createMatchingQuestion();
-      }
       setCurrentQuiz({
         ...currentQuiz,
         questions: [...(currentQuiz.questions || []), { ...question, id: Date.now().toString() }],
@@ -720,24 +694,7 @@ export default function Quizzes() {
                 {selectedQuiz.questions.map((q, idx) => (
                   <div key={q.id || idx} className="p-2 border rounded bg-gray-50">
                     <div className="font-medium">{idx + 1}. {q.stem}</div>
-                    <div className="text-xs text-gray-500">
-                      Type: {q.type.toUpperCase()} | Points: {q.points}
-                      {q.type === 'matching' && q.matchingPairs && (
-                        <div className="mt-2 text-xs">
-                          <div className="font-medium text-gray-700">Matching Pairs:</div>
-                          <div className="grid grid-cols-2 gap-2 mt-1">
-                            {q.matchingPairs.map((pair, i) => (
-                              <div key={pair.id} className="flex items-center gap-2 text-gray-600">
-                                <span className="w-6 text-center">{i + 1}.</span>
-                                <span className="flex-1">{pair.left}</span>
-                                <span className="text-gray-400">→</span>
-                                <span className="flex-1">{pair.right}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
+                    <div className="text-xs text-gray-500">Type: {q.type.toUpperCase()} | Points: {q.points}</div>
                   </div>
                 ))}
                 {selectedQuiz.questions.length === 0 && <div className="text-gray-400">No questions added.</div>}

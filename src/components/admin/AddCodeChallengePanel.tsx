@@ -238,16 +238,16 @@ export function AddCodeChallengePanel({ onClose, initialData }: AddCodeChallenge
               />
             </div>
             <div className="flex gap-4">
-              <div>
-                <label className="block font-medium mb-1">Difficulty</label>
-                <Select value={form.difficulty} onValueChange={val => setForm(f => ({ ...f, difficulty: val }))}>
-                  <SelectTrigger className="w-48">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {DIFFICULTIES.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+            <div>
+              <label className="block font-medium mb-1">Difficulty</label>
+              <Select value={form.difficulty} onValueChange={val => setForm(f => ({ ...f, difficulty: val }))}>
+                <SelectTrigger className="w-48">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {DIFFICULTIES.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                </SelectContent>
+              </Select>
               </div>
               <div>
                 <label className="block font-medium mb-1">XP Points</label>
