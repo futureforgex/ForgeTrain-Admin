@@ -6,9 +6,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { firestore } from '@/lib/firebase';
-import { doc, setDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, collection, addDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 import MonacoEditor from "@monaco-editor/react";
 import { MarkdownEditor } from "@/components/ui/markdown-editor";
+import { toast } from 'sonner';
 
 interface AddCodeChallengePanelProps {
   onClose: () => void;
@@ -48,6 +49,74 @@ interface Step {
   step_number: number;
   explanation: string;
   pseudocode: string;
+}
+
+interface FormErrors {
+  title?: string;
+  slug?: string;
+  description?: string;
+  difficulty?: string;
+  xp_points?: string;
+  time_limit_ms?: string;
+  memory_limit_mb?: string;
+  input_constraints?: string;
+  examples?: string;
+  sample_tests?: string;
+  hidden_tests?: string;
+}
+
+// Add this interface near the top with other interfaces
+interface ChallengeData {
+  // Core Identity
+  title: string;
+  slug: string;
+  description: string;
+  tags: string[];
+  difficulty: string;
+  xp_points: number;
+  
+  // Constraints & Limits
+  time_limit_ms: number;
+  memory_limit_mb: number;
+  input_constraints: string;
+  
+  // Examples & Testcases
+  examples: Example[];
+  sample_tests: TestCase[];
+  hidden_tests: TestCase[];
+  
+  // Learning Aids
+  hints: string[];
+  algorithm_overview: string;
+  step_by_step_solution: Step[];
+  full_editorial: string;
+  
+  // Community & Discussion
+  discussion_enabled: boolean;
+  discussion_threads: string[];
+  comments_count: number;
+  
+  // Submission Analytics
+  submissions_count: number;
+  accepted_count: number;
+  acceptance_rate: number;
+  average_runtime_ms: number;
+  average_memory_mb: number;
+  
+  // Contest & Organizational
+  company_tags: string[];
+  contest_id: string;
+  premium_only: boolean;
+  
+  // Localization & Media
+  translations: { [key: string]: { title: string; description: string } };
+  diagram_images: string[];
+  solution_videos: string[];
+  
+  // Auditing & Versioning
+  created_at?: any;
+  updated_at: any;
+  version: number;
 }
 
 export function AddCodeChallengePanel({ onClose, initialData }: AddCodeChallengePanelProps) {
@@ -125,23 +194,90 @@ export function AddCodeChallengePanel({ onClose, initialData }: AddCodeChallenge
   const [diagramImages, setDiagramImages] = useState<string[]>([]);
   const [solutionVideos, setSolutionVideos] = useState<string[]>([]);
 
-  // Pre-fill form state if editing
+  // Add new state for validation
+  const [errors, setErrors] = useState<FormErrors>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
+
+  // Improve initial data loading with better synchronization
   useEffect(() => {
     if (initialData) {
-      setForm(initialData);
+      // First set the form data
+      setForm({
+        ...initialData,
+        // Ensure all required fields have default values
+        tags: initialData.tags || [],
+        hints: initialData.hints || [],
+        discussion_threads: initialData.discussion_threads || [],
+        company_tags: initialData.company_tags || [],
+        translations: initialData.translations || {},
+        diagram_images: initialData.diagram_images || [],
+        solution_videos: initialData.solution_videos || [],
+      });
+
+      // Then sync all the separate states
+      setExamples(initialData.examples || []);
+      setSampleTests(initialData.sample_tests || []);
+      setHiddenTests(initialData.hidden_tests || []);
+      setSteps(initialData.step_by_step_solution || []);
+      setCompanyTags(initialData.company_tags || []);
+      setDiagramImages(initialData.diagram_images || []);
+      setSolutionVideos(initialData.solution_videos || []);
+      setTags(initialData.tags || TAGS);
     }
   }, [initialData]);
 
+  // Improve form change handler to track all changes
+  const handleFormChange = (updates: Partial<typeof form>) => {
+    setForm(prev => ({ ...prev, ...updates }));
+    setIsDirty(true);
+    
+    // Clear relevant errors when field is updated
+    Object.keys(updates).forEach(key => {
+      if (errors[key as keyof FormErrors]) {
+        setErrors(prev => ({ ...prev, [key]: undefined }));
+      }
+    });
+  };
+
+  // Add handlers for all form fields
+  const handleFieldChange = (field: keyof typeof form, value: any) => {
+    handleFormChange({ [field]: value });
+  };
+
+  // Add handlers for array fields
+  const handleArrayFieldChange = (field: keyof typeof form, index: number, value: any) => {
+    const currentArray = [...(form[field] as any[])];
+    currentArray[index] = value;
+    handleFormChange({ [field]: currentArray });
+  };
+
+  // Add handlers for nested fields
+  const handleNestedFieldChange = (field: keyof typeof form, nestedField: string, value: any) => {
+    handleFormChange({
+      [field]: {
+        ...(form[field] as any),
+        [nestedField]: value
+      }
+    });
+  };
+
   // Auto-generate slug from title
   const handleTitleChange = (val: string) => {
-    setForm(f => ({ ...f, title: val, slug: val.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') }));
+    const slug = val.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    handleFieldChange('slug', slug);
+    
+    if (errors.slug) {
+      setErrors(e => ({ ...e, slug: undefined }));
+    }
   };
 
   // Tag selection
   const handleTagToggle = (tag: string) => {
-    setForm(f => f.tags.includes(tag)
-      ? { ...f, tags: f.tags.filter(t => t !== tag) }
-      : { ...f, tags: [...f.tags, tag] });
+    handleFieldChange('tags', form.tags.includes(tag)
+      ? form.tags.filter(t => t !== tag)
+      : [...form.tags, tag]
+    );
   };
 
   // Add these new helper functions in the component
@@ -212,6 +348,26 @@ export function AddCodeChallengePanel({ onClose, initialData }: AddCodeChallenge
 
   const handleDeleteCompanyTag = (tag: string) => {
     setCompanyTags(companyTags.filter(t => t !== tag));
+  };
+
+  // Hints handlers (using form.hints)
+  const handleAddHint = () => {
+    const newHints = [...form.hints, ''];
+    handleFormChange({ hints: newHints });
+    setIsDirty(true);
+  };
+
+  const handleUpdateHint = (index: number, value: string) => {
+    const newHints = [...form.hints];
+    newHints[index] = value;
+    handleFormChange({ hints: newHints });
+    setIsDirty(true);
+  };
+
+  const handleDeleteHint = (index: number) => {
+    const newHints = form.hints.filter((_, i) => i !== index);
+    handleFormChange({ hints: newHints });
+    setIsDirty(true);
   };
 
   // Tab content renderers
@@ -432,19 +588,33 @@ export function AddCodeChallengePanel({ onClose, initialData }: AddCodeChallenge
               <div className="space-y-4">
                 {form.hints.map((hint, idx) => (
                   <div key={idx} className="flex items-start gap-2">
-                    <Textarea value={hint} onChange={e => {
-                      const newHints = [...form.hints];
-                      newHints[idx] = e.target.value;
-                      setForm(f => ({ ...f, hints: newHints }));
-                    }} rows={2} />
-                    <Button type="button" size="sm" variant="ghost" onClick={() => {
-                      setForm(f => ({ ...f, hints: f.hints.filter((_, i) => i !== idx) }));
-                    }}>Delete</Button>
+                    <Textarea 
+                      value={hint} 
+                      onChange={e => handleUpdateHint(idx, e.target.value)} 
+                      rows={2} 
+                      placeholder="Enter a hint..."
+                      className="flex-1"
+                    />
+                    <Button 
+                      type="button" 
+                      size="sm" 
+                      variant="ghost" 
+                      onClick={() => handleDeleteHint(idx)}
+                      className="shrink-0"
+                    >
+                      Delete
+                    </Button>
                   </div>
                 ))}
-                <Button type="button" size="sm" variant="outline" onClick={() => {
-                  setForm(f => ({ ...f, hints: [...f.hints, ''] }));
-                }}>+ Add Hint</Button>
+                <Button 
+                  type="button" 
+                  size="sm" 
+                  variant="outline" 
+                  onClick={handleAddHint}
+                  className="w-full"
+                >
+                  + Add Hint
+                </Button>
               </div>
             </div>
 
@@ -452,7 +622,7 @@ export function AddCodeChallengePanel({ onClose, initialData }: AddCodeChallenge
               <label className="block font-medium mb-1">Algorithm Overview</label>
               <MarkdownEditor
                 value={form.algorithm_overview}
-                onChange={value => setForm(f => ({ ...f, algorithm_overview: value }))}
+                onChange={value => handleFormChange({ algorithm_overview: value })}
                 placeholder="High-level approach description"
                 className="min-h-[150px]"
               />
@@ -499,7 +669,7 @@ export function AddCodeChallengePanel({ onClose, initialData }: AddCodeChallenge
               <label className="block font-medium mb-1">Full Editorial</label>
               <MarkdownEditor
                 value={form.full_editorial}
-                onChange={value => setForm(f => ({ ...f, full_editorial: value }))}
+                onChange={value => handleFormChange({ full_editorial: value })}
                 placeholder="Complete write-up with code samples"
                 className="min-h-[300px]"
               />
@@ -648,49 +818,235 @@ export function AddCodeChallengePanel({ onClose, initialData }: AddCodeChallenge
     }
   };
 
+  // Add validation function
+  const validateForm = (): boolean => {
+    const newErrors: FormErrors = {};
+    
+    // Core Info validation
+    if (!form.title.trim()) {
+      newErrors.title = 'Title is required';
+    }
+    if (!form.slug.trim()) {
+      newErrors.slug = 'Slug is required';
+    } else if (!/^[a-z0-9-]+$/.test(form.slug)) {
+      newErrors.slug = 'Slug can only contain lowercase letters, numbers, and hyphens';
+    }
+    if (!form.description.trim()) {
+      newErrors.description = 'Description is required';
+    }
+    if (!form.difficulty) {
+      newErrors.difficulty = 'Difficulty is required';
+    }
+    if (form.xp_points < 0) {
+      newErrors.xp_points = 'XP points cannot be negative';
+    }
+
+    // Constraints validation
+    if (form.time_limit_ms < 100) {
+      newErrors.time_limit_ms = 'Time limit must be at least 100ms';
+    }
+    if (form.memory_limit_mb < 32) {
+      newErrors.memory_limit_mb = 'Memory limit must be at least 32MB';
+    }
+
+    // Examples validation
+    if (examples.length === 0) {
+      newErrors.examples = 'At least one example is required';
+    } else {
+      examples.forEach((example, index) => {
+        if (!example.input.trim() || !example.output.trim()) {
+          newErrors.examples = `Example ${index + 1} must have both input and output`;
+        }
+      });
+    }
+
+    // Test cases validation
+    if (sampleTests.length === 0) {
+      newErrors.sample_tests = 'At least one sample test is required';
+    } else {
+      sampleTests.forEach((test, index) => {
+        if (!test.input.trim() || !test.output.trim()) {
+          newErrors.sample_tests = `Sample test ${index + 1} must have both input and output`;
+        }
+      });
+    }
+
+    if (hiddenTests.length === 0) {
+      newErrors.hidden_tests = 'At least one hidden test is required';
+    } else {
+      hiddenTests.forEach((test, index) => {
+        if (!test.input.trim() || !test.output.trim()) {
+          newErrors.hidden_tests = `Hidden test ${index + 1} must have both input and output`;
+        }
+      });
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  // Improve handleSave with better update logic
   const handleSave = async () => {
-    setSaving(true);
+    if (!validateForm()) {
+      toast.error('Please fix the validation errors before saving');
+      return;
+    }
+
+    setIsSubmitting(true);
     setSaveError(null);
+
     try {
       const slug = form.slug || form.title.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
       const challengeRef = doc(firestore, 'challenges', slug);
       
-      // Update timestamps and version
-      const updatedForm = {
-        ...form,
-        examples,
-        sample_tests: sampleTests,
-        hidden_tests: hiddenTests,
-        step_by_step_solution: steps,
+      // Check if document already exists (for new challenges)
+      if (!initialData) {
+        const docSnap = await getDoc(challengeRef);
+        if (docSnap.exists()) {
+          throw new Error('A challenge with this slug already exists');
+        }
+      }
+
+      // Prepare the data for Firebase
+      const challengeData: ChallengeData = {
+        // Core Identity
+        title: form.title.trim(),
+        slug: slug,
+        description: form.description.trim(),
+        tags: form.tags,
+        difficulty: form.difficulty,
+        xp_points: Number(form.xp_points),
+        
+        // Constraints & Limits
+        time_limit_ms: Number(form.time_limit_ms),
+        memory_limit_mb: Number(form.memory_limit_mb),
+        input_constraints: form.input_constraints.trim(),
+        
+        // Examples & Testcases
+        examples: examples.map(example => ({
+          input: example.input.trim(),
+          output: example.output.trim(),
+          explanation: example.explanation.trim()
+        })),
+        sample_tests: sampleTests.map(test => ({
+          input: test.input.trim(),
+          output: test.output.trim()
+        })),
+        hidden_tests: hiddenTests.map(test => ({
+          input: test.input.trim(),
+          output: test.output.trim()
+        })),
+        
+        // Learning Aids
+        hints: form.hints.filter(hint => hint.trim() !== '').map(hint => hint.trim()),
+        algorithm_overview: form.algorithm_overview.trim(),
+        step_by_step_solution: steps.map(step => ({
+          step_number: Number(step.step_number),
+          explanation: step.explanation.trim(),
+          pseudocode: step.pseudocode.trim()
+        })),
+        full_editorial: form.full_editorial.trim(),
+        
+        // Community & Discussion
+        discussion_enabled: Boolean(form.discussion_enabled),
+        discussion_threads: form.discussion_threads,
+        comments_count: Number(form.comments_count),
+        
+        // Submission Analytics
+        submissions_count: Number(form.submissions_count),
+        accepted_count: Number(form.accepted_count),
+        acceptance_rate: Number(form.acceptance_rate),
+        average_runtime_ms: Number(form.average_runtime_ms),
+        average_memory_mb: Number(form.average_memory_mb),
+        
+        // Contest & Organizational
         company_tags: companyTags,
-        diagram_images: diagramImages,
-        solution_videos: solutionVideos,
+        contest_id: form.contest_id.trim(),
+        premium_only: Boolean(form.premium_only),
+        
+        // Localization & Media
+        translations: form.translations,
+        diagram_images: diagramImages.map(url => url.trim()),
+        solution_videos: solutionVideos.map(url => url.trim()),
+        
+        // Auditing & Versioning
         updated_at: serverTimestamp(),
         version: (form.version || 0) + 1,
       };
-      
+
+      // Add created_at only for new challenges
       if (!initialData) {
-        updatedForm.created_at = serverTimestamp();
+        challengeData.created_at = serverTimestamp();
+      }
+
+      // For updates, preserve the created_at timestamp
+      if (initialData?.created_at) {
+        challengeData.created_at = initialData.created_at;
       }
       
-      await setDoc(challengeRef, updatedForm);
-      setSaving(false);
+      // Save to Firebase with proper merge strategy
+      await setDoc(challengeRef, challengeData, { 
+        merge: true,
+        mergeFields: [
+          'title', 'slug', 'description', 'tags', 'difficulty', 'xp_points',
+          'time_limit_ms', 'memory_limit_mb', 'input_constraints',
+          'examples', 'sample_tests', 'hidden_tests',
+          'hints', 'algorithm_overview', 'step_by_step_solution', 'full_editorial',
+          'discussion_enabled', 'discussion_threads', 'comments_count',
+          'submissions_count', 'accepted_count', 'acceptance_rate',
+          'average_runtime_ms', 'average_memory_mb',
+          'company_tags', 'contest_id', 'premium_only',
+          'translations', 'diagram_images', 'solution_videos',
+          'created_at', 'updated_at', 'version'
+        ]
+      });
+
+      toast.success('Challenge saved successfully');
       onClose();
     } catch (err) {
-      setSaving(false);
-      setSaveError('Failed to save challenge.');
+      console.error('Error saving challenge:', err);
+      setSaveError(err instanceof Error ? err.message : 'Failed to save challenge');
+      toast.error(err instanceof Error ? err.message : 'Failed to save challenge');
+    } finally {
+      setIsSubmitting(false);
     }
+  };
+
+  // Add unsaved changes warning
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isDirty) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isDirty]);
+
+  // Improve tab switching with validation
+  const handleTabChange = (newTab: number) => {
+    if (isDirty) {
+      const isValid = validateForm();
+      if (!isValid) {
+        toast.error('Please fix the validation errors before switching tabs');
+        return;
+      }
+    }
+    setActiveTab(newTab);
   };
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4">
       <div className="bg-background rounded-lg shadow-lg w-full max-w-4xl max-h-[95vh] flex flex-col overflow-hidden">
         <div className="flex items-center justify-between p-6 border-b">
-          <h2 className="text-xl font-semibold">Add Code Challenge</h2>
-          <Button variant="ghost" size="icon" onClick={onClose}>
+          <h2 className="text-xl font-semibold">{initialData ? 'Edit' : 'Add'} Code Challenge</h2>
+          <Button variant="ghost" size="icon" onClick={onClose} disabled={isSubmitting}>
             <X className="h-4 w-4" />
           </Button>
         </div>
+        
         {/* Tab Navigation */}
         <div className="flex border-b bg-gray-50 px-6">
           {TABS.map((tab, idx) => (
@@ -700,19 +1056,53 @@ export function AddCodeChallengePanel({ onClose, initialData }: AddCodeChallenge
                 ${activeTab === idx
                   ? 'border-blue-600 text-blue-700 bg-white shadow'
                   : 'border-transparent text-gray-500 hover:text-blue-600'}`}
-              onClick={() => setActiveTab(idx)}
+              onClick={() => handleTabChange(idx)}
             >
               {tab}
             </button>
           ))}
         </div>
+
         {/* Tab Content */}
-        <div className="flex-1 overflow-y-auto p-6">{renderTab()}</div>
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          <div className="min-h-full">
+            {renderTab()}
+            {/* Display validation errors */}
+            {Object.keys(errors).length > 0 && (
+              <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                <h3 className="text-red-700 font-medium mb-2">Please fix the following errors:</h3>
+                <ul className="list-disc list-inside text-red-600">
+                  {Object.entries(errors).map(([key, value]) => (
+                    <li key={key}>{value}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* Footer Actions */}
         <div className="flex items-center justify-end gap-2 p-6 border-t bg-gray-50">
-          <Button variant="ghost" onClick={onClose} disabled={saving}>Cancel</Button>
-          <Button onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Save Code Challenge'}</Button>
-          {saveError && <span className="text-red-500 ml-4">{saveError}</span>}
+          <Button variant="ghost" onClick={onClose} disabled={isSubmitting}>
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleSave} 
+            disabled={isSubmitting}
+            className="min-w-[120px]"
+          >
+            {isSubmitting ? (
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Saving...
+              </div>
+            ) : (
+              'Save Challenge'
+            )}
+          </Button>
+          {saveError && (
+            <span className="text-red-500 ml-4">{saveError}</span>
+          )}
         </div>
       </div>
     </div>
