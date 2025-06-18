@@ -1197,13 +1197,7 @@ export function AddCodeChallengePanel({ onClose, initialData }: AddCodeChallenge
 
   // Improve tab switching with validation
   const handleTabChange = (newTab: number) => {
-    if (isDirty) {
-      const isValid = validateForm();
-      if (!isValid) {
-        toast.error('Please fix the validation errors before switching tabs');
-        return;
-      }
-    }
+    // Only validate if we're trying to save, not when switching tabs
     setActiveTab(newTab);
   };
 
