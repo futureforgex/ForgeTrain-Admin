@@ -33,6 +33,51 @@ const LANGUAGES = [
   { value: 'cpp', label: 'C++' },
 ];
 
+const DEFAULT_TEMPLATES = {
+  python: {
+    starter_code: `def solution():
+    # Write your code here
+    pass`,
+    solution_code: `def solution():
+    # Solution code here
+    pass`
+  },
+  javascript: {
+    starter_code: `function solution() {
+    // Write your code here
+}`,
+    solution_code: `function solution() {
+    // Solution code here
+}`
+  },
+  java: {
+    starter_code: `public class Solution {
+    public void solution() {
+        // Write your code here
+    }
+}`,
+    solution_code: `public class Solution {
+    public void solution() {
+        // Solution code here
+    }
+}`
+  },
+  cpp: {
+    starter_code: `class Solution {
+public:
+    void solution() {
+        // Write your code here
+    }
+};`,
+    solution_code: `class Solution {
+public:
+    void solution() {
+        // Solution code here
+    }
+};`
+  }
+};
+
 // Add these new interfaces after the existing interfaces
 interface Example {
   input: string;
@@ -63,6 +108,7 @@ interface FormErrors {
   examples?: string;
   sample_tests?: string;
   hidden_tests?: string;
+  code_templates?: string;
 }
 
 // Add this interface near the top with other interfaces
@@ -74,6 +120,14 @@ interface ChallengeData {
   tags: string[];
   difficulty: string;
   xp_points: number;
+  
+  // Code Templates
+  code_templates: {
+    [key: string]: {
+      starter_code: string;
+      solution_code: string;
+    };
+  };
   
   // Constraints & Limits
   time_limit_ms: number;
@@ -129,6 +183,9 @@ export function AddCodeChallengePanel({ onClose, initialData }: AddCodeChallenge
     tags: [] as string[],
     difficulty: 'Easy',
     xp_points: 10,
+    
+    // Code Templates
+    code_templates: initialData?.code_templates || { ...DEFAULT_TEMPLATES },
     
     // Constraints & Limits
     time_limit_ms: 1000,
@@ -199,6 +256,17 @@ export function AddCodeChallengePanel({ onClose, initialData }: AddCodeChallenge
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
 
+  // Add new state for code templates
+  const [selectedLanguage, setSelectedLanguage] = useState('python');
+  const [showSolutionCode, setShowSolutionCode] = useState(false);
+
+  // Add this effect to ensure code templates are initialized
+  useEffect(() => {
+    if (!form.code_templates || Object.keys(form.code_templates).length === 0) {
+      handleFormChange({ code_templates: { ...DEFAULT_TEMPLATES } });
+    }
+  }, []);
+
   // Improve initial data loading with better synchronization
   useEffect(() => {
     if (initialData) {
@@ -265,7 +333,11 @@ export function AddCodeChallengePanel({ onClose, initialData }: AddCodeChallenge
   // Auto-generate slug from title
   const handleTitleChange = (val: string) => {
     const slug = val.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-    handleFieldChange('slug', slug);
+    setForm(prev => ({
+      ...prev,
+      title: val,
+      slug: slug
+    }));
     
     if (errors.slug) {
       setErrors(e => ({ ...e, slug: undefined }));
@@ -370,6 +442,20 @@ export function AddCodeChallengePanel({ onClose, initialData }: AddCodeChallenge
     setIsDirty(true);
   };
 
+  // Update the language selection handler
+  const handleLanguageChange = (lang: string) => {
+    setSelectedLanguage(lang);
+    // Initialize template if it doesn't exist
+    if (!form.code_templates[lang]) {
+      const newTemplates = { ...form.code_templates };
+      newTemplates[lang] = DEFAULT_TEMPLATES[lang as keyof typeof DEFAULT_TEMPLATES] || {
+        starter_code: '',
+        solution_code: ''
+      };
+      handleFormChange({ code_templates: newTemplates });
+    }
+  };
+
   // Tab content renderers
   const renderTab = () => {
     switch (activeTab) {
@@ -460,6 +546,76 @@ export function AddCodeChallengePanel({ onClose, initialData }: AddCodeChallenge
                     <Button type="button" size="sm" variant="ghost" onClick={() => { setShowNewTagInput(false); setNewTag(''); }}>Cancel</Button>
                   </div>
                 )}
+              </div>
+            </div>
+
+            {/* Code Templates Section */}
+            <div>
+              <label className="block font-medium mb-2">Code Templates</label>
+              <div className="space-y-4">
+                <div className="flex items-center gap-4">
+                  <Select value={selectedLanguage} onValueChange={handleLanguageChange}>
+                    <SelectTrigger className="w-48">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {LANGUAGES.map(lang => (
+                        <SelectItem key={lang.value} value={lang.value}>
+                          {lang.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="showSolution"
+                      checked={showSolutionCode}
+                      onChange={e => setShowSolutionCode(e.target.checked)}
+                      className="rounded border-gray-300"
+                    />
+                    <label htmlFor="showSolution" className="text-sm">Show Solution Code</label>
+                  </div>
+                </div>
+
+                <div className="border rounded-lg overflow-hidden">
+                  <div className="bg-gray-50 px-4 py-2 border-b flex justify-between items-center">
+                    <span className="font-medium">
+                      {showSolutionCode ? 'Solution Code' : 'Starter Code'} ({LANGUAGES.find(l => l.value === selectedLanguage)?.label})
+                    </span>
+                  </div>
+                  <div className="h-[300px]">
+                    <MonacoEditor
+                      height="300px"
+                      language={selectedLanguage}
+                      value={showSolutionCode 
+                        ? (form.code_templates?.[selectedLanguage]?.solution_code || '')
+                        : (form.code_templates?.[selectedLanguage]?.starter_code || '')
+                      }
+                      onChange={(value) => {
+                        const newTemplates = { ...form.code_templates };
+                        if (!newTemplates[selectedLanguage]) {
+                          newTemplates[selectedLanguage] = { starter_code: '', solution_code: '' };
+                        }
+                        if (showSolutionCode) {
+                          newTemplates[selectedLanguage].solution_code = value || '';
+                        } else {
+                          newTemplates[selectedLanguage].starter_code = value || '';
+                        }
+                        handleFormChange({ code_templates: newTemplates });
+                      }}
+                      theme="vs-dark"
+                      options={{
+                        minimap: { enabled: false },
+                        fontSize: 14,
+                        lineNumbers: 'on',
+                        roundedSelection: false,
+                        scrollBeyondLastLine: false,
+                        automaticLayout: true,
+                      }}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -881,6 +1037,17 @@ export function AddCodeChallengePanel({ onClose, initialData }: AddCodeChallenge
       });
     }
 
+    // Code templates validation
+    if (!form.code_templates || Object.keys(form.code_templates).length === 0) {
+      newErrors.code_templates = 'At least one programming language template is required';
+    } else {
+      Object.entries(form.code_templates).forEach(([lang, template]) => {
+        if (!template?.starter_code?.trim()) {
+          newErrors.code_templates = `${LANGUAGES.find(l => l.value === lang)?.label} starter code is required`;
+        }
+      });
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -916,6 +1083,9 @@ export function AddCodeChallengePanel({ onClose, initialData }: AddCodeChallenge
         tags: form.tags,
         difficulty: form.difficulty,
         xp_points: Number(form.xp_points),
+        
+        // Code Templates
+        code_templates: form.code_templates,
         
         // Constraints & Limits
         time_limit_ms: Number(form.time_limit_ms),
