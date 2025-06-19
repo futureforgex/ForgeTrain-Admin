@@ -1064,6 +1064,16 @@ export function AddCodeChallengePanel({ onClose, initialData }: AddCodeChallenge
 
     try {
       const slug = form.slug || form.title.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+      const challengeRef = doc(firestore, 'challenges', slug);
+      
+      // Check if document already exists (for new challenges)
+      if (!initialData) {
+        const docSnap = await getDoc(challengeRef);
+        if (docSnap.exists()) {
+          throw new Error('A challenge with this slug already exists');
+        }
+      }
+
       // Prepare the data for Firebase
       const challengeData: ChallengeData = {
         // Core Identity
@@ -1143,30 +1153,23 @@ export function AddCodeChallengePanel({ onClose, initialData }: AddCodeChallenge
       if (initialData?.created_at) {
         challengeData.created_at = initialData.created_at;
       }
-
-      if (!initialData) {
-        // New challenge: use auto-generated doc ID
-        await addDoc(collection(firestore, 'challenges'), challengeData);
-      } else {
-        // Editing: use document ID from initialData
-        if (!initialData.id) throw new Error('Missing document ID for update');
-        const challengeRef = doc(firestore, 'challenges', initialData.id);
-        await setDoc(challengeRef, challengeData, { 
-          merge: true,
-          mergeFields: [
-            'title', 'slug', 'description', 'tags', 'difficulty', 'xp_points',
-            'time_limit_ms', 'memory_limit_mb', 'input_constraints',
-            'examples', 'sample_tests', 'hidden_tests',
-            'hints', 'algorithm_overview', 'step_by_step_solution', 'full_editorial',
-            'discussion_enabled', 'discussion_threads', 'comments_count',
-            'submissions_count', 'accepted_count', 'acceptance_rate',
-            'average_runtime_ms', 'average_memory_mb',
-            'company_tags', 'contest_id', 'premium_only',
-            'translations', 'diagram_images', 'solution_videos',
-            'created_at', 'updated_at', 'version'
-          ]
-        });
-      }
+      
+      // Save to Firebase with proper merge strategy
+      await setDoc(challengeRef, challengeData, { 
+        merge: true,
+        mergeFields: [
+          'title', 'slug', 'description', 'tags', 'difficulty', 'xp_points',
+          'time_limit_ms', 'memory_limit_mb', 'input_constraints',
+          'examples', 'sample_tests', 'hidden_tests',
+          'hints', 'algorithm_overview', 'step_by_step_solution', 'full_editorial',
+          'discussion_enabled', 'discussion_threads', 'comments_count',
+          'submissions_count', 'accepted_count', 'acceptance_rate',
+          'average_runtime_ms', 'average_memory_mb',
+          'company_tags', 'contest_id', 'premium_only',
+          'translations', 'diagram_images', 'solution_videos',
+          'created_at', 'updated_at', 'version'
+        ]
+      });
 
       toast.success('Challenge saved successfully');
       onClose();
