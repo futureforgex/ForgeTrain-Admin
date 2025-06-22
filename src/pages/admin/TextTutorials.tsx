@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { firestore, storage } from '@/lib/firebase';
-import { collection, getDocs, deleteDoc, doc, updateDoc, addDoc, setDoc, serverTimestamp, query, orderBy } from 'firebase/firestore';
+import { tutorialService, storageService } from '@/lib/amplifyServices';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Edit, Trash2, Eye, Plus, Save, Clock, Image, FileText, Settings, FileCode, 
@@ -20,7 +19,6 @@ import { DateTimePicker } from '@/components/ui/date-time-picker';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { MarkdownEditor } from '@/components/ui/markdown-editor';
 import { FileUploader } from '@/components/ui/file-uploader';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import ReactMarkdown from 'react-markdown';
 import TurndownService from 'turndown';
 import { debounce } from 'lodash';
@@ -414,9 +412,7 @@ const ImageUpload: React.FC<{
 
     try {
       setUploading(true);
-      const storageRef = ref(storage, `tutorial-images/${uuidv4()}-${file.name}`);
-      await uploadBytes(storageRef, file);
-      const downloadURL = await getDownloadURL(storageRef);
+      const downloadURL = await storageService.uploadFile(file, 'tutorial-images');
       onChange(downloadURL);
     } catch (error) {
       console.error('Error uploading image:', error);
@@ -532,19 +528,18 @@ export default function TextTutorials() {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [filterLevel, setFilterLevel] = useState<string>('all');
 
-  // Update the Firebase save function
+  // Update the AWS Aurora save function
   const saveTutorial = async (tutorial: Tutorial) => {
       try {
         setAutoSaveStatus('saving');
-      const tutorialRef = doc(firestore, 'tutorials', tutorial.id);
       
-      // Prepare the data for Firebase
+      // Prepare the data for Aurora
       const tutorialData = {
         ...tutorial,
         introduction: tutorial.introduction || '',
         body: tutorial.body || '',
         conclusion: tutorial.conclusion || '',
-        // Convert arrays to Firebase arrays
+        // Convert arrays to JSON strings for Aurora
         biteSizeSections: tutorial.biteSizeSections?.map(section => ({
           ...section,
           sectionQuiz: section.sectionQuiz || [],
@@ -562,11 +557,16 @@ export default function TextTutorials() {
         xpPoints: tutorial.xpPoints || 0,
         readingLevel: tutorial.readingLevel || 'medium',
         // Add timestamps
-        updatedAt: serverTimestamp(),
-        createdAt: tutorial.createdAt || serverTimestamp()
+        updatedAt: new Date(),
+        createdAt: tutorial.createdAt || new Date()
       };
 
-      await setDoc(tutorialRef, tutorialData, { merge: true });
+      if (tutorial.id) {
+        await tutorialService.update(tutorialData);
+      } else {
+        await tutorialService.create(tutorialData);
+      }
+      
       setAutoSaveStatus('saved');
       toast({
         title: "Success",
@@ -583,26 +583,11 @@ export default function TextTutorials() {
     }
   };
 
-  // Update the loadTutorials function to handle Firebase timestamps
+  // Update the loadTutorials function to handle Aurora
   const loadTutorials = async () => {
     try {
       setLoading(true);
-      const tutorialsRef = collection(firestore, 'tutorials');
-      const q = query(tutorialsRef, orderBy('createdAt', 'desc'));
-      const querySnapshot = await getDocs(q);
-      
-      const loadedTutorials = querySnapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          ...data,
-          introduction: data.introduction || '',
-          body: data.body || '',
-          conclusion: data.conclusion || '',
-          // ...other fields
-        } as Tutorial;
-      });
-      
+      const loadedTutorials = await tutorialService.list();
       setTutorials(loadedTutorials);
       setError(null);
     } catch (error) {
@@ -617,8 +602,7 @@ export default function TextTutorials() {
   const deleteTutorial = async (id: string) => {
     try {
       setDeletingId(id);
-      const tutorialRef = doc(firestore, 'tutorials', id);
-      await deleteDoc(tutorialRef);
+      await tutorialService.delete(id);
       
       // Update local state
       setTutorials(tutorials.filter(t => t.id !== id));
@@ -729,8 +713,8 @@ export default function TextTutorials() {
     setLoading(true);
     setError(null);
     try {
-      const snap = await getDocs(collection(firestore, 'tutorials'));
-      setTutorials(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Tutorial)));
+      const loadedTutorials = await tutorialService.list();
+      setTutorials(loadedTutorials);
     } catch (err) {
       setError('Failed to load tutorials');
     } finally {
@@ -746,7 +730,7 @@ export default function TextTutorials() {
     if (!confirm('Are you sure you want to delete this tutorial?')) return;
     setDeletingId(id);
     try {
-      await deleteDoc(doc(firestore, 'tutorials', id));
+      await tutorialService.delete(id);
       await fetchTutorials();
       toast({
         title: 'Success',
@@ -765,11 +749,9 @@ export default function TextTutorials() {
 
   const selectedTutorial = tutorials.find(t => t.id === viewId);
 
-  // Helper for uploading a file to Firebase Storage
-  async function uploadFileToStorage(file, folder = 'tutorials') {
-    const fileRef = ref(storage, `${folder}/${Date.now()}_${file.name}`);
-    await uploadBytes(fileRef, file);
-    return await getDownloadURL(fileRef);
+  // Helper for uploading a file to S3
+  async function uploadFileToStorage(file: File, folder = 'tutorials') {
+    return await storageService.uploadFile(file, folder);
   }
 
   // Add this function to handle paste events in the markdown editor

@@ -3,9 +3,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { FiEye, FiEyeOff } from "react-icons/fi";
-import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "@/lib/firebase";
 import { useNavigate } from "react-router-dom";
+import { authService } from "@/lib/amplifyServices";
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
@@ -20,11 +19,21 @@ export default function LoginPage() {
     const form = e.target as HTMLFormElement;
     const email = (form.elements.namedItem("email") as HTMLInputElement).value;
     const password = (form.elements.namedItem("password") as HTMLInputElement).value;
+    
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      await authService.signIn(email, password);
       navigate("/admin");
     } catch (err: any) {
-      setError(err.message || "Login failed");
+      console.error('Login error:', err);
+      if (err.code === 'UserNotConfirmedException') {
+        setError("Please confirm your email address before signing in.");
+      } else if (err.code === 'NotAuthorizedException') {
+        setError("Incorrect email or password.");
+      } else if (err.code === 'UserNotFoundException') {
+        setError("User not found. Please check your email address.");
+      } else {
+        setError(err.message || "Login failed. Please try again.");
+      }
     } finally {
       setLoading(false);
     }

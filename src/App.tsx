@@ -19,25 +19,22 @@ import LoginPage from "@/pages/admin/LoginPage";
 import RequireAuth from "@/components/auth/RequireAuth";
 import PlacementDrives from './pages/admin/PlacementDrives';
 import { createContext, useContext, useEffect, useState } from "react";
-import { auth } from "@/lib/firebase";
-import { onAuthStateChanged, User } from "firebase/auth";
 import LeaderboardAdmin from './pages/admin/LeaderboardAdmin';
 import Announcements from './pages/admin/Announcements';
 import Analytics from './pages/admin/Analytics';
 import Settings from './pages/admin/Settings';
 import Colleges from './pages/admin/Colleges';
-// AuthProvider context
-export const AuthContext = createContext<{ user: User | null, loading: boolean }>({ user: null, loading: true });
+
+// AuthProvider context - simplified for now
+export const AuthContext = createContext<{ user: any | null, loading: boolean }>({ user: null, loading: true });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (u) => {
-      setUser(u);
-      setLoading(false);
-    });
-    return () => unsubscribe();
+    // Placeholder for AWS authentication
+    setUser("AWS_USER");
+    setLoading(false);
   }, []);
   return (
     <AuthContext.Provider value={{ user, loading }}>

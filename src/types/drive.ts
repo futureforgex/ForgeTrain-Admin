@@ -1,5 +1,3 @@
-import { Timestamp } from 'firebase/firestore';
-
 export interface Drive {
   id: string;
   company: string;
@@ -25,8 +23,8 @@ export interface Drive {
   module: string;
   thumbnailUrl: string;
   status: string;
-  createdAt?: Timestamp;
-  updatedAt?: Timestamp;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 export interface FormState extends Omit<Drive, 'id' | 'status' | 'createdAt' | 'updatedAt'> {
