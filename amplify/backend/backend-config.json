@@ -1,118 +1,103 @@
 {
-  "UserAgent": "aws-amplify-cli/2.0",
-  "Version": "1.0",
-  "auth": {
-    "forgetrainAuth": {
-      "userPoolId": "us-east-1_example",
-      "userPoolClientId": "example",
-      "userPoolClientName": "forgetrainAuth_userpoolclient",
-      "userPoolClientSecret": "example",
-      "userPoolClientLambdaRole": "forgetrainAuth_userpoolclient_lambda_role",
-      "userPoolClientLogPolicy": "forgetrainAuth_userpoolclient_log_policy",
-      "userPoolClientReadPolicy": "forgetrainAuth_userpoolclient_read_policy",
-      "userPoolClientWritePolicy": "forgetrainAuth_userpoolclient_write_policy",
-      "userPoolClientRefreshTokenValidity": 30,
-      "userPoolClientRefreshTokenRotation": "ENABLED",
-      "userPoolClientLambdaPolicy": "forgetrainAuth_userpoolclient_lambda_policy",
-      "userPoolClientUserAttributes": [],
-      "userPoolClientGenerateSecret": "NO",
-      "userPoolClientExplicitAuthFlows": [
-        "ALLOW_USER_PASSWORD_AUTH",
-        "ALLOW_REFRESH_TOKEN_AUTH",
-        "ALLOW_USER_SRP_AUTH"
-      ],
-      "userPoolClientReadAttributes": [
-        "email",
-        "email_verified",
-        "name",
-        "phone_number",
-        "phone_number_verified",
-        "profile"
-      ],
-      "userPoolClientWriteAttributes": [
-        "email",
-        "name",
-        "phone_number",
-        "profile"
-      ],
-      "userPoolClientDefaultRedirectURI": "http://localhost:3000/",
-      "userPoolClientAllowedOAuthFlows": [
-        "code"
-      ],
-      "userPoolClientAllowedOAuthScopes": [
-        "email",
-        "openid",
-        "profile"
-      ],
-      "userPoolClientCallbackURLs": [
-        "http://localhost:3000/"
-      ],
-      "userPoolClientLogoutURLs": [
-        "http://localhost:3000/"
-      ],
-      "userPoolClientAllowedOAuthFlowsUserPoolClient": "true",
-      "userPoolClientPreventUserExistenceErrors": "ENABLED",
-      "userPoolClientSupportedIdentityProviders": [
-        "COGNITO"
-      ],
-      "userPoolClientTokenValidityUnits": {
-        "AccessToken": "hours",
-        "IdToken": "hours",
-        "RefreshToken": "days"
-      },
-      "userPoolClientTokenValidity": {
-        "AccessToken": 1,
-        "IdToken": 1,
-        "RefreshToken": 30
-      },
-      "userPoolClientLambdaConfig": {},
-      "userPoolClientAnalyticsConfig": {},
-      "userPoolClientAdditionalSettings": {}
-    }
-  },
   "api": {
-    "forgetrain": {
-      "service": "AppSync",
-      "providerPlugin": "awscloudformation",
+    "forgetrainadmin": {
       "dependsOn": [
         {
-          "category": "auth",
-          "resourceName": "forgetrainAuth",
           "attributes": [
             "UserPoolId"
-          ]
+          ],
+          "category": "auth",
+          "resourceName": "forgetrainadmin42a45c88"
         }
       ],
       "output": {
         "authConfig": {
-          "additionalAuthenticationProviders": [],
-          "defaultAuthentication": {
-            "authenticationType": "AMAZON_COGNITO_USER_POOLS",
-            "userPoolConfig": {
-              "userPoolId": "us-east-1_example"
+          "additionalAuthenticationProviders": [
+            {
+              "authenticationType": "AMAZON_COGNITO_USER_POOLS",
+              "userPoolConfig": {
+                "userPoolId": "authforgetrainadmin42a45c88"
+              }
             }
+          ],
+          "defaultAuthentication": {
+            "apiKeyConfig": {
+              "apiKeyExpirationDays": 7
+            },
+            "authenticationType": "API_KEY"
           }
         }
-      }
+      },
+      "providerPlugin": "awscloudformation",
+      "service": "AppSync"
+    }
+  },
+  "auth": {
+    "forgetrainadmin42a45c88": {
+      "customAuth": false,
+      "dependsOn": [],
+      "frontendAuthConfig": {
+        "mfaConfiguration": "OFF",
+        "mfaTypes": [
+          "SMS"
+        ],
+        "passwordProtectionSettings": {
+          "passwordPolicyCharacters": [],
+          "passwordPolicyMinLength": 8
+        },
+        "signupAttributes": [
+          "EMAIL"
+        ],
+        "socialProviders": [],
+        "usernameAttributes": [],
+        "verificationMechanisms": [
+          "EMAIL"
+        ]
+      },
+      "providerPlugin": "awscloudformation",
+      "service": "Cognito"
+    }
+  },
+  "function": {
+    "S3Triggerc169c8f2": {
+      "build": true,
+      "providerPlugin": "awscloudformation",
+      "service": "Lambda"
+    }
+  },
+  "parameters": {
+    "AMPLIFY_function_S3Triggerc169c8f2_deploymentBucketName": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "S3Triggerc169c8f2"
+        }
+      ]
+    },
+    "AMPLIFY_function_S3Triggerc169c8f2_s3Key": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "S3Triggerc169c8f2"
+        }
+      ]
     }
   },
   "storage": {
-    "forgetrainStorage": {
-      "service": "S3",
-      "providerPlugin": "awscloudformation",
+    "s38b84ae02": {
       "dependsOn": [
         {
-          "category": "auth",
-          "resourceName": "forgetrainAuth",
           "attributes": [
-            "UserPoolId"
-          ]
+            "Name",
+            "Arn",
+            "LambdaExecutionRole"
+          ],
+          "category": "function",
+          "resourceName": "S3Triggerc169c8f2"
         }
       ],
-      "output": {
-        "bucketName": "forgetrain-storage",
-        "region": "us-east-1"
-      }
+      "providerPlugin": "awscloudformation",
+      "service": "S3"
     }
   }
-} 
+}

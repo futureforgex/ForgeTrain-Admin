@@ -5,9 +5,10 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { X } from 'lucide-react';
 import NewDriveWizard from '@/components/admin/NewDriveWizard';
-import { collection, getDocs, query, where, orderBy, Timestamp, Query, DocumentData, QueryConstraint } from 'firebase/firestore';
-import { firestore } from '@/lib/firebase';
 import { Drive } from '@/types/drive';
+import { generateClient } from 'aws-amplify/api';
+import * as queries from '@/graphql/queries';
+import * as mutations from '@/graphql/mutations';
 
 const statusColors: Record<string, string> = {
   'published': 'bg-green-100 text-green-800',
@@ -24,66 +25,37 @@ function PlacementDrives() {
   const [drives, setDrives] = useState<Drive[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const client = generateClient();
 
   useEffect(() => {
     fetchDrives();
+    // eslint-disable-next-line
   }, [filter]);
 
   async function fetchDrives() {
     setLoading(true);
     setError(null);
     try {
-      const constraints: QueryConstraint[] = [];
-
-      if (filter.company !== 'all') {
-        constraints.push(where('company', '==', filter.company));
-      }
-      if (filter.status !== 'all') {
-        constraints.push(where('status', '==', filter.status));
-      }
-      if (filter.eligibility !== 'all') {
-        constraints.push(where('branches', 'array-contains', filter.eligibility));
-      }
-      if (filter.date) {
-        constraints.push(where('startDate', '>=', filter.date));
-      }
-      constraints.push(orderBy('createdAt', 'desc'));
-
-      const q = query(collection(firestore, 'placementDrives'), ...constraints);
-      const snapshot = await getDocs(q);
-      const drivesData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        startDate: doc.data().startDate || '',
-      })) as Drive[];
-
-      setDrives(drivesData);
+      // Build filter object for Amplify
+      let filterObj: any = {};
+      if (filter.company !== 'all') filterObj.company = { eq: filter.company };
+      if (filter.status !== 'all') filterObj.status = { eq: filter.status };
+      if (filter.eligibility !== 'all') filterObj.branches = { contains: filter.eligibility };
+      if (filter.date) filterObj.startDate = { ge: filter.date };
+      const { data } = await client.graphql({
+        query: queries.listDrives,
+        variables: {
+          filter: Object.keys(filterObj).length ? filterObj : undefined,
+          limit: 1000,
+        },
+      });
+      setDrives(data?.listDrives?.items || []);
     } catch (err) {
-      // Show a friendlier error for index issues
-      if (
-        typeof err === 'object' &&
-        err &&
-        'message' in err &&
-        (err as any).message.includes('index')
-      ) {
-        const url = extractIndexUrl((err as any).message);
-        setError(
-          `Firestore requires a composite index for this filter. ` +
-          (url !== '#' ? `Click here to create it: ${url}` : '')
-        );
-      } else {
-        setError('Failed to fetch drives: ' + (err as Error).message);
-      }
+      setError('Failed to fetch drives: ' + (err as Error).message);
       console.error('Error fetching drives:', err);
     } finally {
       setLoading(false);
     }
-  }
-
-  // Helper to extract the index URL from the error message
-  function extractIndexUrl(msg: string) {
-    const match = msg.match(/(https:\/\/console\.firebase\.google\.com[^\s]+)/);
-    return match ? match[1] : '#';
   }
 
   // Filtered drives (real data)
@@ -109,21 +81,7 @@ function PlacementDrives() {
       {/* Error Message */}
       {error && (
         <div className="mb-4 p-4 bg-red-100 text-red-700 rounded-lg">
-          {error.includes('Click here to create it:') ? (
-            <span>
-              Firestore requires a composite index for this filter.{' '}
-              <a
-                href={error.split('Click here to create it:')[1].trim()}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline text-blue-600"
-              >
-                Click here to create it.
-              </a>
-            </span>
-          ) : (
-            error
-          )}
+          {error}
         </div>
       )}
 

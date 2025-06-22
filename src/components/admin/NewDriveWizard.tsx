@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { X } from 'lucide-react';
-import { collection, getDocs, addDoc, Timestamp, doc, updateDoc } from 'firebase/firestore';
-import { firestore } from '@/lib/firebase';
-import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Drive, FormState } from '@/types/drive';
+import { generateClient } from 'aws-amplify/api';
+import { uploadData } from 'aws-amplify/storage';
+import * as queries from '@/graphql/queries';
+import * as mutations from '@/graphql/mutations';
 
 const COMPANY_OPTIONS = [
   { value: 'Infosys', label: 'Infosys', logo: '🅸' },
@@ -59,6 +60,7 @@ export default function NewDriveWizard({ open, onClose, editingDrive }: NewDrive
   const [saving, setSaving] = useState(false);
   const [thumbPreview, setThumbPreview] = useState<string | null>(null);
   const [modules, setModules] = useState<{ value: string, label: string }[]>([]);
+  const client = generateClient();
 
   useEffect(() => {
     if (editingDrive) {
@@ -102,15 +104,16 @@ export default function NewDriveWizard({ open, onClose, editingDrive }: NewDrive
   useEffect(() => {
     if (!open) return;
     async function fetchModules() {
-      const snap = await getDocs(collection(firestore, 'modules'));
+      const { data } = await client.graphql({ query: queries.listModules, variables: { limit: 1000 } });
       setModules(
-        snap.docs.map(doc => ({
-          value: doc.id,
-          label: doc.data().title || doc.id,
-        }))
+        data?.listModules?.items?.map((mod: any) => ({
+          value: mod.id,
+          label: mod.title || mod.id,
+        })) || []
       );
     }
     fetchModules();
+    // eslint-disable-next-line
   }, [open]);
 
   function handleThumbnailChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -128,10 +131,9 @@ export default function NewDriveWizard({ open, onClose, editingDrive }: NewDrive
 
   async function uploadThumbnailIfNeeded(): Promise<string> {
     if (!form.thumbnail) return form.thumbnailUrl || '';
-    const storage = getStorage();
-    const fileRef = ref(storage, `drive-thumbnails/${Date.now()}_${form.thumbnail.name}`);
-    await uploadBytes(fileRef, form.thumbnail);
-    return await getDownloadURL(fileRef);
+    const key = `drive-thumbnails/${Date.now()}_${form.thumbnail.name}`;
+    await uploadData({ key, data: form.thumbnail, options: { contentType: form.thumbnail.type } });
+    return key;
   }
 
   async function handleSave(publish: boolean) {
@@ -139,28 +141,27 @@ export default function NewDriveWizard({ open, onClose, editingDrive }: NewDrive
     try {
       let thumbnailUrl = form.thumbnailUrl;
       if (form.thumbnail) {
-        thumbnailUrl = await uploadThumbnailIfNeeded();
+        const key = await uploadThumbnailIfNeeded();
+        thumbnailUrl = key;
       }
-
       const docData = {
         ...form,
         thumbnailUrl,
         status: publish ? 'published' : 'draft',
-        updatedAt: Timestamp.now(),
+        updatedAt: new Date().toISOString(),
       };
-
-      delete docData.thumbnail;
-
+      delete (docData as any).thumbnail;
       if (editingDrive) {
-        await updateDoc(doc(firestore, 'placementDrives', editingDrive.id), docData);
+        await client.graphql({
+          query: mutations.updateDrive,
+          variables: { input: { id: editingDrive.id, ...docData } },
+        });
       } else {
-        const newDocData = {
-          ...docData,
-          createdAt: Timestamp.now(),
-        };
-        await addDoc(collection(firestore, 'placementDrives'), newDocData);
+        await client.graphql({
+          query: mutations.createDrive,
+          variables: { input: { ...docData, createdAt: new Date().toISOString() } },
+        });
       }
-
       onClose();
     } catch (err) {
       alert('Failed to save: ' + (err as Error).message);

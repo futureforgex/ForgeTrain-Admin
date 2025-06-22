@@ -36,9 +36,10 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { ModuleForm } from '@/components/admin/ModuleForm';
-import { firestore } from '@/lib/firebase';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { AddCodeChallengePanel } from '@/components/admin/AddCodeChallengePanel';
+import { generateClient } from 'aws-amplify/api';
+import * as queries from '@/graphql/queries';
+import * as mutations from '@/graphql/mutations';
 
 interface Module {
   id: string;
@@ -63,16 +64,28 @@ export default function LearningContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isAddCodeChallengeOpen, setIsAddCodeChallengeOpen] = useState(false);
+  const client = generateClient();
 
-  // Fetch modules from Firestore
+  // Fetch modules from Amplify
   const fetchModules = async () => {
     setLoading(true);
     setError(null);
     try {
-      const q = query(collection(firestore, 'modules'), orderBy('createdAt', 'desc'));
-      const snapshot = await getDocs(q);
-      const data: Module[] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Module));
-      setModules(data);
+      const { data } = await client.graphql({ query: queries.listModules, variables: { limit: 1000 } });
+      const items = data?.listModules?.items || [];
+      const dataModules: Module[] = items.map((item: any) => ({
+        id: item.id,
+        title: item.title,
+        description: item.description,
+        track: item.track,
+        status: item.status,
+        lessonCount: item.lessons ? item.lessons.length : 0,
+        lastEdited: item.updated_at || '',
+        editor: item.owner || '',
+        tags: item.tags || [],
+        thumbnail: item.thumbnailUrl,
+      }));
+      setModules(dataModules);
     } catch (err) {
       setError('Failed to load modules');
     } finally {
@@ -82,12 +95,26 @@ export default function LearningContent() {
 
   useEffect(() => {
     fetchModules();
+    // eslint-disable-next-line
   }, []);
 
   // Refresh list after adding a module
   const handleModuleFormClose = () => {
     setIsModuleFormOpen(false);
     fetchModules();
+  };
+
+  // Delete module using Amplify
+  const handleDelete = async (moduleId: string) => {
+    try {
+      await client.graphql({
+        query: mutations.deleteModule,
+        variables: { input: { id: moduleId } },
+      });
+      fetchModules();
+    } catch (err) {
+      setError('Failed to delete module');
+    }
   };
 
   // Filter modules based on search, track, status, tags
@@ -120,12 +147,6 @@ export default function LearningContent() {
 
   const handleArchive = (module: Module) => {
     // Implement archive logic here
-  };
-
-  const handleDelete = async (moduleId: string) => {
-    // Implement delete logic here
-    await deleteModuleFromFirestore(moduleId);
-    fetchModules();
   };
 
   const handleAddLesson = (module: Module) => {

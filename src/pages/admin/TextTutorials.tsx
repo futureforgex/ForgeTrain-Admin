@@ -588,7 +588,25 @@ export default function TextTutorials() {
     try {
       setLoading(true);
       const loadedTutorials = await tutorialService.list();
-      setTutorials(loadedTutorials);
+      // Transform the data to match our Tutorial interface
+      const transformedTutorials = loadedTutorials.map((tutorial: any) => ({
+        ...tutorial,
+        biteSizeSections: tutorial.biteSizeSections || [],
+        preferredLearningStyle: tutorial.preferredLearningStyle || [],
+        learningObjectives: tutorial.learningObjectives || [],
+        prerequisites: tutorial.prerequisites || [],
+        keyTakeaways: tutorial.keyTakeaways || [],
+        milestoneBadges: tutorial.milestoneBadges || [],
+        builtInPoints: tutorial.builtInPoints || [],
+        tags: tutorial.tags || [],
+        images: tutorial.images || [],
+        diagrams: tutorial.diagrams || [],
+        downloadableAssets: tutorial.downloadableAssets || [],
+        codeSnippets: tutorial.codeSnippets || [],
+        createdAt: tutorial.createdAt ? new Date(tutorial.createdAt) : new Date(),
+        updatedAt: tutorial.updatedAt ? new Date(tutorial.updatedAt) : new Date()
+      }));
+      setTutorials(transformedTutorials);
       setError(null);
     } catch (error) {
       console.error('Error loading tutorials:', error);
@@ -714,7 +732,25 @@ export default function TextTutorials() {
     setError(null);
     try {
       const loadedTutorials = await tutorialService.list();
-      setTutorials(loadedTutorials);
+      // Transform the data to match our Tutorial interface
+      const transformedTutorials = loadedTutorials.map((tutorial: any) => ({
+        ...tutorial,
+        biteSizeSections: tutorial.biteSizeSections || [],
+        preferredLearningStyle: tutorial.preferredLearningStyle || [],
+        learningObjectives: tutorial.learningObjectives || [],
+        prerequisites: tutorial.prerequisites || [],
+        keyTakeaways: tutorial.keyTakeaways || [],
+        milestoneBadges: tutorial.milestoneBadges || [],
+        builtInPoints: tutorial.builtInPoints || [],
+        tags: tutorial.tags || [],
+        images: tutorial.images || [],
+        diagrams: tutorial.diagrams || [],
+        downloadableAssets: tutorial.downloadableAssets || [],
+        codeSnippets: tutorial.codeSnippets || [],
+        createdAt: tutorial.createdAt ? new Date(tutorial.createdAt) : new Date(),
+        updatedAt: tutorial.updatedAt ? new Date(tutorial.updatedAt) : new Date()
+      }));
+      setTutorials(transformedTutorials);
     } catch (err) {
       setError('Failed to load tutorials');
     } finally {
@@ -1592,25 +1628,69 @@ export default function TextTutorials() {
   // Update the handleSave function to ensure all required fields
   const handleSave = async () => {
     try {
+      setAutoSaveStatus('saving');
+      
+      // Transform biteSizeSections to match GraphQL schema
+      const transformedBiteSizeSections = (currentTutorial.biteSizeSections || []).map(section => ({
+        sectionId: section.sectionId || `section-${Date.now()}`,
+        heading: section.heading || '',
+        contentMd: section.contentMd || '',
+        humorTip: section.humorTip || '',
+        mnemonic: section.mnemonic || '',
+        codeSnippet: {
+          language: section.codeSnippet?.language || '',
+          code: section.codeSnippet?.code || '',
+          explanations: section.codeSnippet?.explanations || []
+        },
+        challengePrompt: section.challengePrompt || '',
+        sectionQuiz: section.sectionQuiz || [],
+        playgroundEmbedId: section.playgroundEmbedId || '',
+        autoCheckSnippet: section.autoCheckSnippet || false
+      }));
+      
+      // Prepare the tutorial data
+      const tutorialData = {
+        ...currentTutorial,
+        id: editId || crypto.randomUUID(),
+        tutorialId: currentTutorial.tutorialId || generateIds().tutorialId,
+        topicId: currentTutorial.topicId || generateIds().topicId,
+        title: currentTutorial.title || 'Untitled Tutorial',
+        status: currentTutorial.status || 'draft',
+        biteSizeSections: transformedBiteSizeSections,
+        createdAt: (currentTutorial.createdAt ? new Date(currentTutorial.createdAt) : new Date()).toISOString(),
+        updatedAt: new Date().toISOString(),
+        publishDate: currentTutorial.publishDate ? new Date(currentTutorial.publishDate).toISOString() : null,
+      };
+
+      // Remove undefined fields
+      Object.keys(tutorialData).forEach(key => {
+        if (tutorialData[key as keyof typeof tutorialData] === undefined) {
+          delete tutorialData[key as keyof typeof tutorialData];
+        }
+      });
+      
       if (editId) {
-        const updatedTutorial: Tutorial = {
-          ...defaultTutorial,
-          ...currentTutorial,
-          id: editId
-        };
-        await saveTutorial(updatedTutorial);
+        await tutorialService.update(tutorialData);
         toast({
           title: 'Success',
           description: 'Tutorial updated successfully',
         });
       } else {
-        await handleCreateTutorial();
+        await tutorialService.create(tutorialData);
+        toast({
+          title: 'Success',
+          description: 'Tutorial created successfully',
+        });
       }
+      
+      setAutoSaveStatus('saved');
       setIsAddModalOpen(false);
       setEditId(null);
+      setCurrentTutorial(defaultTutorial);
       loadTutorials();
     } catch (error) {
       console.error('Error saving tutorial:', error);
+      setAutoSaveStatus('error');
       toast({
         title: 'Error',
         description: 'Failed to save tutorial',
@@ -1622,22 +1702,64 @@ export default function TextTutorials() {
   // Update the handlePublish function to ensure all required fields
   const handlePublish = async () => {
     try {
-      const publishedTutorial: Tutorial = {
-        ...defaultTutorial,
+      setAutoSaveStatus('saving');
+      
+      // Transform biteSizeSections to match GraphQL schema
+      const transformedBiteSizeSections = (currentTutorial.biteSizeSections || []).map(section => ({
+        sectionId: section.sectionId || `section-${Date.now()}`,
+        heading: section.heading || '',
+        contentMd: section.contentMd || '',
+        humorTip: section.humorTip || '',
+        mnemonic: section.mnemonic || '',
+        codeSnippet: {
+          language: section.codeSnippet?.language || '',
+          code: section.codeSnippet?.code || '',
+          explanations: section.codeSnippet?.explanations || []
+        },
+        challengePrompt: section.challengePrompt || '',
+        sectionQuiz: section.sectionQuiz || [],
+        playgroundEmbedId: section.playgroundEmbedId || '',
+        autoCheckSnippet: section.autoCheckSnippet || false
+      }));
+      
+      const publishedTutorial = {
         ...currentTutorial,
-        id: currentTutorial.id || crypto.randomUUID(),
-        status: 'published'
+        id: editId || crypto.randomUUID(),
+        tutorialId: currentTutorial.tutorialId || generateIds().tutorialId,
+        topicId: currentTutorial.topicId || generateIds().topicId,
+        title: currentTutorial.title || 'Untitled Tutorial',
+        status: 'published',
+        biteSizeSections: transformedBiteSizeSections,
+        createdAt: (currentTutorial.createdAt ? new Date(currentTutorial.createdAt) : new Date()).toISOString(),
+        updatedAt: new Date().toISOString(),
+        publishDate: new Date().toISOString(),
       };
-      await saveTutorial(publishedTutorial);
+
+      // Remove undefined fields
+      Object.keys(publishedTutorial).forEach(key => {
+        if (publishedTutorial[key as keyof typeof publishedTutorial] === undefined) {
+          delete publishedTutorial[key as keyof typeof publishedTutorial];
+        }
+      });
+
+      if (editId) {
+        await tutorialService.update(publishedTutorial);
+      } else {
+        await tutorialService.create(publishedTutorial);
+      }
+      
+      setAutoSaveStatus('saved');
       toast({
         title: 'Success',
         description: 'Tutorial published successfully',
       });
       setIsAddModalOpen(false);
       setEditId(null);
+      setCurrentTutorial(defaultTutorial);
       loadTutorials();
     } catch (error) {
       console.error('Error publishing tutorial:', error);
+      setAutoSaveStatus('error');
       toast({
         title: 'Error',
         description: 'Failed to publish tutorial',

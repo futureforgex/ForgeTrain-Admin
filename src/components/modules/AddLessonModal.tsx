@@ -5,9 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Search, Video, FileText, Code, Target, HelpCircle, AlertCircle } from "lucide-react";
-import { collection, query, where, getDocs } from "firebase/firestore";
-import { db } from "@/lib/firebase";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { tutorialService, driveService, quizService } from "@/lib/amplifyServices";
 
 interface Resource {
   id: string;
@@ -86,68 +85,66 @@ export function AddLessonModal({ open, onClose, onSelect, moduleId }: AddLessonM
     setLoading(true);
     setError(null);
     try {
-      // Fetch from each collection
-      const [tutorialsSnap, videoTutorialsSnap, projectTasksSnap, challengesSnap, quizzesSnap] = await Promise.all([
-        getDocs(collection(db, "tutorials")),
-        getDocs(collection(db, "videoTutorials")),
-        getDocs(collection(db, "projectTasks")),
-        getDocs(collection(db, "challenges")),
-        getDocs(collection(db, "quizzes")),
+      // Fetch from Amplify services
+      const [tutorials, drives, quizzes] = await Promise.all([
+        tutorialService.list(),
+        driveService.list(),
+        quizService.list(),
       ]);
 
-      // Map each collection to Resource[]
-      const tutorials = tutorialsSnap.docs.map(doc => ({
-        id: doc.id,
-        title: doc.data().title,
+      // Map tutorials to Resource[]
+      const tutorialResources = tutorials.map((tutorial: any) => ({
+        id: tutorial.id,
+        title: tutorial.title,
         type: "text" as Resource['type'],
-        description: doc.data().description,
-        tags: doc.data().tags || [],
-        // ...other fields as needed
+        description: tutorial.subtitle || tutorial.description,
+        tags: tutorial.tags || [],
+        difficulty: tutorial.readingLevel,
+        duration: tutorial.estimatedTimeMins,
       }));
 
-      const videoTutorials = videoTutorialsSnap.docs.map(doc => ({
-        id: doc.id,
-        title: doc.data().title,
-        type: "video" as Resource['type'],
-        description: doc.data().description,
-        tags: doc.data().tags || [],
-        // ...other fields as needed
-      }));
-
-      const projects = projectTasksSnap.docs.map(doc => ({
-        id: doc.id,
-        title: doc.data().title,
+      // Map drives (projects) to Resource[]
+      const projectResources = drives.map((drive: any) => ({
+        id: drive.id,
+        title: drive.driveTitle,
         type: "project" as Resource['type'],
-        description: doc.data().description,
-        tags: doc.data().tags || [],
-        // ...other fields as needed
+        description: drive.description,
+        tags: [drive.company, drive.driveType].filter(Boolean),
+        difficulty: 'intermediate' as const,
       }));
 
-      const codeChallenges = challengesSnap.docs.map(doc => ({
-        id: doc.id,
-        title: doc.data().title || doc.data().slug,
-        type: "code" as Resource['type'],
-        description: doc.data().description,
-        tags: doc.data().editorTags || [],
-        // ...other fields as needed
-      }));
-
-      const quizzes = quizzesSnap.docs.map(doc => ({
-        id: doc.id,
-        title: doc.data().title,
+      // Map quizzes to Resource[]
+      const quizResources = quizzes.map((quiz: any) => ({
+        id: quiz.id,
+        title: quiz.title,
         type: "quiz" as Resource['type'],
-        description: doc.data().description,
-        tags: doc.data().tags || [],
-        // ...other fields as needed
+        description: quiz.description,
+        tags: quiz.tags || [],
+        difficulty: quiz.difficulty,
+        duration: quiz.timeLimit,
+      }));
+
+      // For now, we'll use tutorials as video tutorials and code exercises
+      // In a real implementation, you'd have separate collections for these
+      const videoResources = tutorialResources.slice(0, 5).map(tutorial => ({
+        ...tutorial,
+        type: "video" as Resource['type'],
+        title: `Video: ${tutorial.title}`,
+      }));
+
+      const codeResources = tutorialResources.slice(5, 10).map(tutorial => ({
+        ...tutorial,
+        type: "code" as Resource['type'],
+        title: `Code Exercise: ${tutorial.title}`,
       }));
 
       // Combine all resources
       const allResources = [
-        ...tutorials,
-        ...videoTutorials,
-        ...projects,
-        ...codeChallenges,
-        ...quizzes,
+        ...tutorialResources,
+        ...videoResources,
+        ...codeResources,
+        ...projectResources,
+        ...quizResources,
       ];
 
       // Group by type for your UI

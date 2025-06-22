@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { firestore } from '@/lib/firebase';
-import { collection, getDocs, deleteDoc, doc, updateDoc, getDoc, setDoc } from 'firebase/firestore';
+import { generateClient } from 'aws-amplify/api';
+import * as queries from '@/graphql/queries';
+import * as mutations from '@/graphql/mutations';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Edit, Trash2, Eye, Plus, GripVertical } from 'lucide-react';
@@ -12,7 +13,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/components/ui/use-toast';
-import { addDoc, serverTimestamp } from 'firebase/firestore';
 import { QuestionForm } from '@/components/admin/QuestionForm';
 
 interface Quiz {
@@ -89,13 +89,19 @@ export default function Quizzes() {
   const [newCategory, setNewCategory] = useState('');
   const [categories, setCategories] = useState<string[]>([]);
   const [isEditMode, setIsEditMode] = useState(false);
+  const client = generateClient();
 
   const fetchQuizzes = async () => {
     setLoading(true);
     setError(null);
     try {
-      const snap = await getDocs(collection(firestore, 'quizzes'));
-      setQuizzes(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Quiz)));
+      const { data } = await client.graphql({ query: queries.listQuizzes, variables: { limit: 1000 } });
+      const fetchedQuizzes = data?.listQuizzes?.items?.map((item: any) => ({
+        id: item.id,
+        ...item,
+        createdAt: new Date(item.createdAt),
+      })) || [];
+      setQuizzes(fetchedQuizzes);
     } catch (err) {
       setError('Failed to load quizzes');
     } finally {
@@ -105,9 +111,8 @@ export default function Quizzes() {
 
   const fetchCategories = async () => {
     try {
-      const categoriesRef = collection(firestore, 'quizCategories');
-      const snap = await getDocs(categoriesRef);
-      const categoryList = snap.docs.map(doc => doc.data().name);
+      // For now, we'll use a hardcoded list since we don't have a separate categories table
+      const categoryList = ['Programming', 'Mathematics', 'Science', 'General Knowledge'];
       setCategories(categoryList);
     } catch (error) {
       toast({
@@ -121,12 +126,16 @@ export default function Quizzes() {
   useEffect(() => {
     fetchQuizzes();
     fetchCategories();
+    // eslint-disable-next-line
   }, []);
 
   const handleDelete = async (id: string) => {
     setDeletingId(id);
     try {
-      await deleteDoc(doc(firestore, 'quizzes', id));
+      await client.graphql({
+        query: mutations.deleteQuiz,
+        variables: { input: { id } },
+      });
       setQuizzes(quizzes.filter(q => q.id !== id));
     } catch (err) {
       setError('Failed to delete quiz');
@@ -141,13 +150,7 @@ export default function Quizzes() {
     if (!newCategory.trim()) return;
 
     try {
-      // Add to Firestore
-      await addDoc(collection(firestore, 'quizCategories'), {
-        name: newCategory.trim(),
-        createdAt: serverTimestamp(),
-      });
-
-      // Update local state
+      // For now, just update local state since we don't have a categories table
       setCategories([...categories, newCategory.trim()]);
       setCurrentQuiz({ ...currentQuiz, category: newCategory.trim() });
       setShowNewCategoryInput(false);
@@ -170,10 +173,21 @@ export default function Quizzes() {
     setEditId(id);
     setIsEditMode(true);
     // Fetch quiz data for editing
-    const quizDoc = await getDoc(doc(firestore, 'quizzes', id));
-    if (quizDoc.exists()) {
-      setCurrentQuiz({ ...quizDoc.data(), id });
-      setIsAddModalOpen(true);
+    try {
+      const { data } = await client.graphql({
+        query: queries.getQuiz,
+        variables: { id },
+      });
+      if (data.getQuiz) {
+        setCurrentQuiz({ ...data.getQuiz, id });
+        setIsAddModalOpen(true);
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to load quiz data',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -196,20 +210,23 @@ export default function Quizzes() {
         slug,
         questions: Array.isArray(currentQuiz.questions) ? currentQuiz.questions : [],
         status: statusOverride || currentQuiz.status || 'draft',
-        updatedAt: serverTimestamp(),
+        updatedAt: new Date().toISOString(),
       };
       if (isEditMode && currentQuiz.id) {
         // Update existing quiz
-        await setDoc(doc(firestore, 'quizzes', currentQuiz.id), quizData, { merge: true });
+        await client.graphql({
+          query: mutations.updateQuiz,
+          variables: { input: quizData },
+        });
         toast({
           title: 'Success',
           description: `Quiz updated successfully`,
         });
       } else {
         // Add new quiz
-        await addDoc(collection(firestore, 'quizzes'), {
-          ...quizData,
-          createdAt: serverTimestamp(),
+        await client.graphql({
+          query: mutations.createQuiz,
+          variables: { input: quizData },
         });
         toast({
           title: 'Success',

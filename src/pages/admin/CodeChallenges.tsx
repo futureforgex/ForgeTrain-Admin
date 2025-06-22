@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { firestore } from '@/lib/firebase';
-import { collection, getDocs, deleteDoc, doc } from 'firebase/firestore';
+import { generateClient } from 'aws-amplify/api';
+import * as queries from '@/graphql/queries';
+import * as mutations from '@/graphql/mutations';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Edit, Trash2, Eye, X } from 'lucide-react';
@@ -10,6 +11,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { MarkdownPreview } from '@/components/ui/markdown-preview';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+
+const client = generateClient();
 
 interface Challenge {
   id: string;
@@ -34,8 +37,8 @@ interface Challenge {
   acceptance_rate?: number;
   company_tags?: string[];
   premium_only?: boolean;
-  created_at?: any;
-  updated_at?: any;
+  created_at?: string;
+  updated_at?: string;
   version?: number;
 }
 
@@ -54,9 +57,12 @@ export default function CodeChallenges() {
     setLoading(true);
     setError(null);
     try {
-      const snap = await getDocs(collection(firestore, 'challenges'));
-      setChallenges(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Challenge)));
+      const response = await client.graphql({
+        query: queries.listChallenges,
+      });
+      setChallenges(response.data.listChallenges.items || []);
     } catch (err) {
+      console.error('Error fetching challenges:', err);
       setError('Failed to load challenges');
     } finally {
       setLoading(false);
@@ -72,18 +78,9 @@ export default function CodeChallenges() {
       if (editId) {
         const challenge = challenges.find(c => c.id === editId);
         if (!challenge) return;
-        // Fetch subcollections (remove hints)
-        const [testCasesSnap, editorialStepsSnap] = await Promise.all([
-          getDocs(collection(firestore, 'challenges', challenge.slug, 'testCases')),
-          getDocs(collection(firestore, 'challenges', challenge.slug, 'editorialSteps')),
-        ]);
-        setEditInitialData({
-          ...challenge,
-          testCases: testCasesSnap.docs.map(doc => doc.data()),
-          // Use hints from main doc only
-          // hints: challenge.hints,
-          editorialSteps: editorialStepsSnap.docs.map(doc => doc.data()),
-        });
+        
+        // For Amplify, we can use the challenge data directly since it's already fetched
+        setEditInitialData(challenge);
       } else {
         setEditInitialData(null);
       }
@@ -95,9 +92,13 @@ export default function CodeChallenges() {
   const handleDelete = async (id: string) => {
     setDeletingId(id);
     try {
-      await deleteDoc(doc(firestore, 'challenges', id));
+      await client.graphql({
+        query: mutations.deleteChallenge,
+        variables: { input: { id } },
+      });
       setChallenges(challenges.filter(c => c.id !== id));
     } catch (err) {
+      console.error('Error deleting challenge:', err);
       setError('Failed to delete challenge');
     } finally {
       setDeletingId(null);
@@ -108,9 +109,9 @@ export default function CodeChallenges() {
   const selectedChallenge = challenges.find(c => c.id === viewId || c.id === editId);
 
   // Add this new function to format timestamps
-  const formatDate = (timestamp: any) => {
+  const formatDate = (timestamp: string | undefined) => {
     if (!timestamp) return 'N/A';
-    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    const date = new Date(timestamp);
     return date.toLocaleString();
   };
 

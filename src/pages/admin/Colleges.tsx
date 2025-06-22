@@ -8,9 +8,10 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Search, Filter, ChevronLeft, ChevronRight, Plus, Edit2, Trash2, Eye } from "lucide-react";
-import { db, storage } from "@/lib/firebase";
-import { collection, addDoc, updateDoc, doc, getDocs, deleteDoc } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { generateClient } from 'aws-amplify/api';
+import { uploadData } from 'aws-amplify/storage';
+import * as queries from '@/graphql/queries';
+import * as mutations from '@/graphql/mutations';
 
 const INDIAN_STATES = [
   "Andhra Pradesh",
@@ -154,6 +155,7 @@ export default function Colleges() {
   });
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+  const client = generateClient();
 
   // Department form state (for adding new department)
   const [deptForm, setDeptForm] = useState({
@@ -164,50 +166,52 @@ export default function Colleges() {
   });
   const [deptEditIndex, setDeptEditIndex] = useState<number | null>(null);
 
-  // Fetch colleges from Firestore on mount
+  // Fetch colleges from Amplify on mount
   useEffect(() => {
     async function fetchColleges() {
-      const snapshot = await getDocs(collection(db, "colleges"));
-      const data = snapshot.docs.map(docSnap => {
-        const d = docSnap.data();
-        return {
-          id: docSnap.id,
-          name: d.name || "",
-          code: d.code || "",
-          type: d.type || "Engineering",
-          website: d.website || "",
-          logo: d.logo || "",
+      try {
+        const { data } = await client.graphql({ query: queries.listColleges, variables: { limit: 1000 } });
+        const fetchedColleges = data?.listColleges?.items?.map((item: any) => ({
+          id: item.id,
+          name: item.name || "",
+          code: item.code || "",
+          type: item.type || "Engineering",
+          website: item.website || "",
+          logo: item.logo || "",
           address: {
-            line1: d.address?.line1 || "",
-            line2: d.address?.line2 || "",
-            city: d.address?.city || "",
-            state: d.address?.state || "",
-            pinCode: d.address?.pinCode || "",
+            line1: item.address?.line1 || "",
+            line2: item.address?.line2 || "",
+            city: item.address?.city || "",
+            state: item.address?.state || "",
+            pinCode: item.address?.pinCode || "",
           },
           contact: {
-            name: d.contact?.name || "",
-            email: d.contact?.email || "",
-            phone: d.contact?.phone || "",
+            name: item.contact?.name || "",
+            email: item.contact?.email || "",
+            phone: item.contact?.phone || "",
           },
-          status: d.status || "Active",
-          hasDepartments: d.hasDepartments ?? true,
-          notes: d.notes || "",
-          departments: d.departments || [],
-        };
-      });
-      console.log("Fetched colleges from Firestore:", data);
-      setColleges(data.length > 0 ? data : mockColleges);
+          status: item.status || "Active",
+          hasDepartments: item.hasDepartments ?? true,
+          notes: item.notes || "",
+          departments: item.departments || [],
+        })) || [];
+        console.log("Fetched colleges from Amplify:", fetchedColleges);
+        setColleges(fetchedColleges.length > 0 ? fetchedColleges : mockColleges);
+      } catch (error) {
+        console.error("Error fetching colleges:", error);
+        setColleges(mockColleges);
+      }
     }
     fetchColleges();
+    // eslint-disable-next-line
   }, []);
 
   // Add this function to handle logo upload
   const handleLogoUpload = async (file: File) => {
     try {
-      const storageRef = ref(storage, `college-logos/${Date.now()}_${file.name}`);
-      await uploadBytes(storageRef, file);
-      const downloadURL = await getDownloadURL(storageRef);
-      setForm(f => ({ ...f, logo: downloadURL }));
+      const key = `college-logos/${Date.now()}_${file.name}`;
+      await uploadData({ key, data: file, options: { contentType: file.type } });
+      setForm(f => ({ ...f, logo: key }));
     } catch (error) {
       console.error("Error uploading logo:", error);
       alert("Failed to upload logo. Please try again.");
@@ -218,7 +222,7 @@ export default function Colleges() {
   async function handleSaveCollege() {
     try {
       if (editing) {
-        // Update in Firestore
+        // Update in Amplify
         const { id, ...updateData } = form;
         // Remove all undefined fields
         const cleanData = Object.fromEntries(
@@ -226,7 +230,10 @@ export default function Colleges() {
         );
         
         // Update the document
-        await updateDoc(doc(db, "colleges", editing.id), cleanData);
+        await client.graphql({
+          query: mutations.updateCollege,
+          variables: { input: { id: editing.id, ...cleanData } },
+        });
         
         // Update local state
         setColleges(cols => 
@@ -235,11 +242,14 @@ export default function Colleges() {
         
         alert("College updated successfully!");
       } else {
-        // Add to Firestore
-        const docRef = await addDoc(collection(db, "colleges"), form);
+        // Add to Amplify
+        const { data } = await client.graphql({
+          query: mutations.createCollege,
+          variables: { input: form },
+        });
         setColleges(cols => [
           ...cols,
-          { ...form, id: docRef.id } as College,
+          { ...form, id: data.createCollege.id } as College,
         ]);
         alert("College added successfully!");
       }
@@ -286,8 +296,11 @@ export default function Colleges() {
   async function handleDeleteCollege(id: string) {
     if (window.confirm("Are you sure you want to delete this college? This action cannot be undone.")) {
       try {
-        // Delete from Firestore
-        await deleteDoc(doc(db, "colleges", id));
+        // Delete from Amplify
+        await client.graphql({
+          query: mutations.deleteCollege,
+          variables: { input: { id } },
+        });
         // Update local state
         setColleges(cols => cols.filter(c => c.id !== id));
         alert("College deleted successfully!");

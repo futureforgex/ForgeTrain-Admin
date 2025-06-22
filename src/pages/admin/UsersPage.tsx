@@ -1,5 +1,4 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   User,
   UserPlus, 
@@ -28,16 +27,47 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
-import mockUsers, { User as UserType } from '@/data/mockUsers';
+import { generateClient } from 'aws-amplify/api';
+import * as queries from '@/graphql/queries';
+import * as mutations from '@/graphql/mutations';
+
+interface UserType {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  college: string;
+  department?: string;
+  year?: number;
+  status: string;
+  lastLogin?: string;
+}
 
 const UsersPage = () => {
   const [currentTab, setCurrentTab] = useState('all');
   const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
   const [isEditUserModalOpen, setIsEditUserModalOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState<UserType | null>(null);
-  
+  const [users, setUsers] = useState<UserType[]>([]);
+  const client = generateClient();
+
+  useEffect(() => {
+    fetchUsers();
+    // eslint-disable-next-line
+  }, []);
+
+  const fetchUsers = async () => {
+    try {
+      const { data } = await client.graphql({ query: queries.listUsers, variables: { limit: 1000 } });
+      const items = data?.listUsers?.items || [];
+      setUsers(items);
+    } catch (err) {
+      setUsers([]);
+    }
+  };
+
   // Filter users based on current tab
-  const filteredUsers = mockUsers.filter(user => {
+  const filteredUsers = users.filter(user => {
     if (currentTab === 'all') return true;
     if (currentTab === 'active') return user.status === 'active';
     if (currentTab === 'inactive') return user.status === 'inactive';
@@ -47,29 +77,90 @@ const UsersPage = () => {
     if (currentTab === 'officers') return user.role === 'officer';
     return true;
   });
-  
+
   const handleEditUser = (user: UserType) => {
     setCurrentUser(user);
     setIsEditUserModalOpen(true);
   };
-  
-  const handleDeleteUser = (user: UserType) => {
-    // In a real app, this would call an API to delete the user
-    console.log('Deleting user:', user);
+
+  const handleDeleteUser = async (user: UserType) => {
+    try {
+      await client.graphql({
+        query: mutations.deleteUser,
+        variables: { input: { id: user.id } },
+      });
+      fetchUsers();
+    } catch (err) {
+      // handle error
+    }
   };
-  
-  const handleSubmitAddUser = (e: React.FormEvent) => {
+
+  const handleSubmitAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    // In a real app, this would call an API to add the user
-    console.log('Adding user with form data');
-    setIsAddUserModalOpen(false);
+    const form = e.target as typeof e.target & {
+      name: { value: string };
+      email: { value: string };
+      role: { value: string };
+      status: { value: string };
+      college: { value: string };
+      department: { value: string };
+      year: { value: string };
+    };
+    try {
+      await client.graphql({
+        query: mutations.createUser,
+        variables: {
+          input: {
+            name: form.name.value,
+            email: form.email.value,
+            role: form.role.value,
+            status: form.status.value,
+            college: form.college.value,
+            department: form.department.value,
+            year: Number(form.year.value),
+          },
+        },
+      });
+      setIsAddUserModalOpen(false);
+      fetchUsers();
+    } catch (err) {
+      // handle error
+    }
   };
-  
-  const handleSubmitEditUser = (e: React.FormEvent) => {
+
+  const handleSubmitEditUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    // In a real app, this would call an API to update the user
-    console.log('Updating user:', currentUser);
-    setIsEditUserModalOpen(false);
+    if (!currentUser) return;
+    const form = e.target as typeof e.target & {
+      name: { value: string };
+      email: { value: string };
+      role: { value: string };
+      status: { value: string };
+      college: { value: string };
+      department: { value: string };
+      year: { value: string };
+    };
+    try {
+      await client.graphql({
+        query: mutations.updateUser,
+        variables: {
+          input: {
+            id: currentUser.id,
+            name: form.name.value,
+            email: form.email.value,
+            role: form.role.value,
+            status: form.status.value,
+            college: form.college.value,
+            department: form.department.value,
+            year: Number(form.year.value),
+          },
+        },
+      });
+      setIsEditUserModalOpen(false);
+      fetchUsers();
+    } catch (err) {
+      // handle error
+    }
   };
   
   const getRoleColor = (role: string) => {

@@ -5,11 +5,13 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { firestore } from '@/lib/firebase';
-import { doc, setDoc, collection, addDoc, serverTimestamp, getDoc } from 'firebase/firestore';
+import { generateClient } from 'aws-amplify/api';
+import * as mutations from '@/graphql/mutations';
 import MonacoEditor from "@monaco-editor/react";
 import { MarkdownEditor } from "@/components/ui/markdown-editor";
 import { toast } from 'sonner';
+
+const client = generateClient();
 
 interface AddCodeChallengePanelProps {
   onClose: () => void;
@@ -1042,7 +1044,8 @@ export function AddCodeChallengePanel({ onClose, initialData }: AddCodeChallenge
       newErrors.code_templates = 'At least one programming language template is required';
     } else {
       Object.entries(form.code_templates).forEach(([lang, template]) => {
-        if (!template?.starter_code?.trim()) {
+        const typedTemplate = template as { starter_code?: string; solution_code?: string };
+        if (!typedTemplate?.starter_code?.trim()) {
           newErrors.code_templates = `${LANGUAGES.find(l => l.value === lang)?.label} starter code is required`;
         }
       });
@@ -1064,18 +1067,9 @@ export function AddCodeChallengePanel({ onClose, initialData }: AddCodeChallenge
 
     try {
       const slug = form.slug || form.title.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-      const challengeRef = doc(firestore, 'challenges', slug);
       
-      // Check if document already exists (for new challenges)
-      if (!initialData) {
-        const docSnap = await getDoc(challengeRef);
-        if (docSnap.exists()) {
-          throw new Error('A challenge with this slug already exists');
-        }
-      }
-
-      // Prepare the data for Firebase
-      const challengeData: ChallengeData = {
+      // Prepare the data for GraphQL mutation
+      const challengeInput: any = {
         // Core Identity
         title: form.title.trim(),
         slug: slug,
@@ -1085,7 +1079,7 @@ export function AddCodeChallengePanel({ onClose, initialData }: AddCodeChallenge
         xp_points: Number(form.xp_points),
         
         // Code Templates
-        code_templates: form.code_templates,
+        code_templates: JSON.stringify(form.code_templates),
         
         // Constraints & Limits
         time_limit_ms: Number(form.time_limit_ms),
@@ -1135,41 +1129,44 @@ export function AddCodeChallengePanel({ onClose, initialData }: AddCodeChallenge
         premium_only: Boolean(form.premium_only),
         
         // Localization & Media
-        translations: form.translations,
+        translations: JSON.stringify(form.translations),
         diagram_images: diagramImages.map(url => url.trim()),
         solution_videos: solutionVideos.map(url => url.trim()),
         
         // Auditing & Versioning
-        updated_at: serverTimestamp(),
+        updated_at: new Date().toISOString(),
         version: (form.version || 0) + 1,
       };
 
       // Add created_at only for new challenges
       if (!initialData) {
-        challengeData.created_at = serverTimestamp();
+        challengeInput.created_at = new Date().toISOString();
       }
 
       // For updates, preserve the created_at timestamp
       if (initialData?.created_at) {
-        challengeData.created_at = initialData.created_at;
+        challengeInput.created_at = initialData.created_at;
       }
       
-      // Save to Firebase with proper merge strategy
-      await setDoc(challengeRef, challengeData, { 
-        merge: true,
-        mergeFields: [
-          'title', 'slug', 'description', 'tags', 'difficulty', 'xp_points',
-          'time_limit_ms', 'memory_limit_mb', 'input_constraints',
-          'examples', 'sample_tests', 'hidden_tests',
-          'hints', 'algorithm_overview', 'step_by_step_solution', 'full_editorial',
-          'discussion_enabled', 'discussion_threads', 'comments_count',
-          'submissions_count', 'accepted_count', 'acceptance_rate',
-          'average_runtime_ms', 'average_memory_mb',
-          'company_tags', 'contest_id', 'premium_only',
-          'translations', 'diagram_images', 'solution_videos',
-          'created_at', 'updated_at', 'version'
-        ]
-      });
+      // Save to DynamoDB via AppSync
+      if (initialData) {
+        // Update existing challenge
+        await client.graphql({
+          query: mutations.updateChallenge,
+          variables: { 
+            input: {
+              id: initialData.id,
+              ...challengeInput
+            }
+          },
+        });
+      } else {
+        // Create new challenge
+        await client.graphql({
+          query: mutations.createChallenge,
+          variables: { input: challengeInput },
+        });
+      }
 
       toast.success('Challenge saved successfully');
       onClose();

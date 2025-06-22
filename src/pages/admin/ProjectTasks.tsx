@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { firestore, storage } from '@/lib/firebase';
-import { collection, getDocs, deleteDoc, doc, updateDoc, addDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { tutorialService, driveService, quizService, collegeService, storageService } from '@/lib/amplifyServices';
+import { generateClient } from 'aws-amplify/api';
+
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Edit, Trash2, Eye, Plus, Save, ClipboardList, User, Calendar, Paperclip } from 'lucide-react';
@@ -96,20 +96,24 @@ export default function ProjectTasks() {
   });
   const { toast } = useToast();
 
-  // Helper for uploading a file to Firebase Storage
-  async function uploadFileToStorage(file, folder = 'project-tasks') {
-    const fileRef = ref(storage, `${folder}/${Date.now()}_${file.name}`);
-    await uploadBytes(fileRef, file);
-    return await getDownloadURL(fileRef);
+  // Helper for uploading a file to Amplify Storage
+  async function uploadFileToStorage(file: File, folder = 'project-tasks') {
+    try {
+      const url = await storageService.uploadFile(file, folder);
+      return url;
+    } catch (error) {
+      console.error('Error uploading file:', error);
+      throw error;
+    }
   }
 
   // Helper to remove undefined fields
-  function cleanForFirestore(obj) {
-    if (Array.isArray(obj)) return obj.map(cleanForFirestore);
+  function cleanForAmplify(obj: any) {
+    if (Array.isArray(obj)) return obj.map(cleanForAmplify);
     if (obj && typeof obj === 'object') {
-      const cleaned = {};
+      const cleaned: any = {};
       for (const key in obj) {
-        if (obj[key] !== undefined) cleaned[key] = cleanForFirestore(obj[key]);
+        if (obj[key] !== undefined) cleaned[key] = cleanForAmplify(obj[key]);
       }
       return cleaned;
     }
@@ -120,10 +124,49 @@ export default function ProjectTasks() {
     setLoading(true);
     setError(null);
     try {
-      const snap = await getDocs(collection(firestore, 'projectTasks'));
-      setTasks(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as ProjectTask)));
+      // For now, we'll use the drive service and map drives to project tasks
+      // In a real implementation, you'd have a separate projectTasks service
+      const drives = await driveService.list();
+      const projectTasks = drives.map((drive: any) => ({
+        id: drive.id,
+        title: drive.driveTitle,
+        description: drive.description,
+        status: 'todo' as const,
+        assignee: '',
+        dueDate: drive.endDate ? new Date(drive.endDate) : undefined,
+        priority: 'medium' as const,
+        tags: [drive.company, drive.driveType].filter(Boolean),
+        attachments: [],
+        createdAt: drive.createdAt,
+        updatedAt: drive.updatedAt,
+        slug: drive.driveTitle?.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+        shortDescription: drive.description,
+        estimatedEffort: 0,
+        module: drive.module || 'projects',
+        repoSource: '',
+        repoUrl: '',
+        repoZipUrl: '',
+        specDocUrl: '',
+        sampleAssets: [],
+        envFiles: [],
+        deliverables: '',
+        automatedTests: false,
+        testSuiteUrl: '',
+        manualChecklist: '',
+        deadline: drive.endDate ? new Date(drive.endDate) : null,
+        submissionFormat: '',
+        visibility: drive.visibility || 'public',
+        prerequisites: [],
+        maxAttempts: 0,
+        timeLimit: 0,
+        metaDescription: drive.description,
+        difficulty: 'medium',
+      } as ProjectTask));
+      
+      setTasks(projectTasks);
     } catch (err) {
       setError('Failed to load project tasks');
+      console.error('Error fetching tasks:', err);
     } finally {
       setLoading(false);
     }
@@ -137,11 +180,12 @@ export default function ProjectTasks() {
     if (!confirm('Are you sure you want to delete this task?')) return;
     setDeletingId(id);
     try {
-      await deleteDoc(doc(firestore, 'projectTasks', id));
+      await driveService.delete(id);
       await fetchTasks();
       toast({ title: 'Success', description: 'Task deleted successfully' });
     } catch (err) {
       toast({ title: 'Error', description: 'Failed to delete task', variant: 'destructive' });
+      console.error('Error deleting task:', err);
     } finally {
       setDeletingId(null);
     }
@@ -153,18 +197,27 @@ export default function ProjectTasks() {
       return;
     }
     try {
-      const cleanedTask = cleanForFirestore(currentTask);
+      const cleanedTask = cleanForAmplify(currentTask);
+      const taskData = {
+        ...cleanedTask,
+        updatedAt: new Date(),
+        // Map project task fields to drive fields
+        driveTitle: currentTask.title,
+        company: currentTask.module,
+        driveType: currentTask.difficulty,
+        description: currentTask.description,
+        endDate: currentTask.deadline,
+        visibility: currentTask.visibility,
+        module: currentTask.module,
+      };
+
       if (editId) {
-        await updateDoc(doc(firestore, 'projectTasks', editId), {
-          ...cleanedTask,
-          updatedAt: new Date(),
-        });
+        await driveService.update({ id: editId, ...taskData });
         toast({ title: 'Success', description: 'Task updated successfully' });
       } else {
-        await addDoc(collection(firestore, 'projectTasks'), {
-          ...cleanedTask,
+        await driveService.create({
+          ...taskData,
           createdAt: new Date(),
-          updatedAt: new Date(),
         });
         toast({ title: 'Success', description: 'Task created successfully' });
       }
@@ -173,6 +226,7 @@ export default function ProjectTasks() {
       fetchTasks();
     } catch (err) {
       toast({ title: 'Error', description: 'Failed to save task', variant: 'destructive' });
+      console.error('Error saving task:', err);
     }
   };
 
@@ -273,7 +327,7 @@ export default function ProjectTasks() {
                   Assignee: {task.assignee || 'Unassigned'}
                 </div>
                 <div className="text-xs text-gray-500">
-                  Due: {task.dueDate ? new Date(task.dueDate.seconds ? task.dueDate.seconds * 1000 : task.dueDate).toLocaleDateString() : 'No due date'}
+                  Due: {task.dueDate ? new Date(task.dueDate).toLocaleDateString() : 'No due date'}
                 </div>
               </div>
             ))
@@ -554,7 +608,7 @@ export default function ProjectTasks() {
                   <div className="space-y-2">
                     <Label className="font-semibold">Deadline</Label>
                     <DateTimePicker
-                      value={currentTask.deadline ? new Date(currentTask.deadline instanceof Date ? currentTask.deadline : (currentTask.deadline as any).seconds * 1000) : undefined}
+                      value={currentTask.deadline ? new Date(currentTask.deadline) : undefined}
                       onChange={date => setCurrentTask({ ...currentTask, deadline: date })}
                       aria-label="Deadline"
                     />
@@ -782,7 +836,7 @@ export default function ProjectTasks() {
                 <div className="whitespace-pre-line text-gray-800">{selectedTask.manualChecklist}</div>
               </div>
               <div className="mb-2 text-xs text-gray-500">
-                <strong>Deadline:</strong> {selectedTask.deadline ? new Date((selectedTask.deadline as any).seconds ? (selectedTask.deadline as any).seconds * 1000 : selectedTask.deadline).toLocaleString() : 'None'}
+                <strong>Deadline:</strong> {selectedTask.deadline ? new Date(selectedTask.deadline).toLocaleString() : 'None'}
               </div>
               <div className="mb-2 text-xs text-gray-500">
                 <strong>Submission Format:</strong> {selectedTask.submissionFormat}

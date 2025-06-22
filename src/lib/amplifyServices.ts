@@ -1,43 +1,45 @@
-import { API, graphqlOperation } from 'aws-amplify';
-import { Storage } from 'aws-amplify/storage';
-import { Auth } from 'aws-amplify/auth';
+import { generateClient } from 'aws-amplify/api';
+import { uploadData, getUrl, remove } from 'aws-amplify/storage';
+import { signIn, signOut, getCurrentUser, fetchUserAttributes, signUp, confirmSignUp as confirmSignUpAmplify } from 'aws-amplify/auth';
 import { 
   createTutorial, 
   updateTutorial, 
-  deleteTutorial, 
-  listTutorials,
-  getTutorial,
+  deleteTutorial,
   createDrive,
   updateDrive,
   deleteDrive,
-  listDrives,
-  getDrive,
   createQuiz,
   updateQuiz,
   deleteQuiz,
-  listQuizzes,
-  getQuiz,
   createCollege,
   updateCollege,
   deleteCollege,
-  listColleges,
-  getCollege,
   createAnnouncement,
   updateAnnouncement,
   deleteAnnouncement,
-  listAnnouncements,
-  getAnnouncement,
   createLeaderboard,
   updateLeaderboard,
   deleteLeaderboard,
-  listLeaderboards,
-  getLeaderboard,
   createAnalytics,
   updateAnalytics,
-  deleteAnalytics,
+  deleteAnalytics
+} from '../graphql/mutations';
+import {
+  listTutorials,
+  getTutorial,
+  listDrives,
+  getDrive,
+  listQuizzes,
+  getQuiz,
+  listColleges,
+  getCollege,
+  listAnnouncements,
+  getAnnouncement,
+  listLeaderboards,
+  getLeaderboard,
   listAnalytics,
   getAnalytics
-} from '../graphql/mutations';
+} from '../graphql/queries';
 import { 
   onCreateTutorial,
   onUpdateTutorial,
@@ -66,18 +68,12 @@ import {
 export const tutorialService = {
   async create(tutorial: any) {
     try {
-      const result = await API.graphql(graphqlOperation(`
-        mutation CreateTutorial($input: CreateTutorialInput!) {
-          createTutorial(input: $input) {
-            id
-            title
-            subtitle
-            status
-            createdAt
-            updatedAt
-          }
-        }
-      `, { input: tutorial }));
+      const client = generateClient();
+      const result = await client.graphql({
+        query: createTutorial,
+        variables: { input: tutorial },
+        authMode: 'userPool'
+      });
       return result.data.createTutorial;
     } catch (error) {
       console.error('Error creating tutorial:', error);
@@ -87,17 +83,12 @@ export const tutorialService = {
 
   async update(tutorial: any) {
     try {
-      const result = await API.graphql(graphqlOperation(`
-        mutation UpdateTutorial($input: UpdateTutorialInput!) {
-          updateTutorial(input: $input) {
-            id
-            title
-            subtitle
-            status
-            updatedAt
-          }
-        }
-      `, { input: tutorial }));
+      const client = generateClient();
+      const result = await client.graphql({
+        query: updateTutorial,
+        variables: { input: tutorial },
+        authMode: 'userPool'
+      });
       return result.data.updateTutorial;
     } catch (error) {
       console.error('Error updating tutorial:', error);
@@ -107,13 +98,12 @@ export const tutorialService = {
 
   async delete(id: string) {
     try {
-      const result = await API.graphql(graphqlOperation(`
-        mutation DeleteTutorial($input: DeleteTutorialInput!) {
-          deleteTutorial(input: $input) {
-            id
-          }
-        }
-      `, { input: { id } }));
+      const client = generateClient();
+      const result = await client.graphql({
+        query: deleteTutorial,
+        variables: { input: { id } },
+        authMode: 'userPool'
+      });
       return result.data.deleteTutorial;
     } catch (error) {
       console.error('Error deleting tutorial:', error);
@@ -123,57 +113,10 @@ export const tutorialService = {
 
   async list() {
     try {
-      const result = await API.graphql(graphqlOperation(`
-        query ListTutorials {
-          listTutorials {
-            items {
-              id
-              tutorialId
-              topicId
-              title
-              subtitle
-              coverImageUrl
-              altText
-              estimatedTimeMins
-              readingLevel
-              preferredLearningStyle
-              storyContext
-              learningObjectives
-              prerequisites
-              biteSizeSections
-              keyTakeaways
-              funFact
-              reflectionPrompt
-              discussionThreadUrl
-              progressBadge
-              xpPoints
-              streakMultiplier
-              milestoneBadges
-              spacedRepetitionId
-              nextTutorialId
-              body
-              metaDescription
-              category
-              tags
-              status
-              publishDate
-              introduction
-              conclusion
-              images
-              diagrams
-              downloadableAssets
-              codeSnippets
-              slug
-              estimatedReadTime
-              filledSummary
-              builtInPoints
-              createdAt
-              updatedAt
-              owner
-            }
-          }
-        }
-      `));
+      const client = generateClient();
+      const result = await client.graphql({
+        query: listTutorials
+      });
       return result.data.listTutorials.items;
     } catch (error) {
       console.error('Error listing tutorials:', error);
@@ -183,55 +126,11 @@ export const tutorialService = {
 
   async get(id: string) {
     try {
-      const result = await API.graphql(graphqlOperation(`
-        query GetTutorial($id: ID!) {
-          getTutorial(id: $id) {
-            id
-            tutorialId
-            topicId
-            title
-            subtitle
-            coverImageUrl
-            altText
-            estimatedTimeMins
-            readingLevel
-            preferredLearningStyle
-            storyContext
-            learningObjectives
-            prerequisites
-            biteSizeSections
-            keyTakeaways
-            funFact
-            reflectionPrompt
-            discussionThreadUrl
-            progressBadge
-            xpPoints
-            streakMultiplier
-            milestoneBadges
-            spacedRepetitionId
-            nextTutorialId
-            body
-            metaDescription
-            category
-            tags
-            status
-            publishDate
-            introduction
-            conclusion
-            images
-            diagrams
-            downloadableAssets
-            codeSnippets
-            slug
-            estimatedReadTime
-            filledSummary
-            builtInPoints
-            createdAt
-            updatedAt
-            owner
-          }
-        }
-      `, { id }));
+      const client = generateClient();
+      const result = await client.graphql({
+        query: getTutorial,
+        variables: { id }
+      });
       return result.data.getTutorial;
     } catch (error) {
       console.error('Error getting tutorial:', error);
@@ -240,9 +139,11 @@ export const tutorialService = {
   },
 
   subscribeToChanges(callback: (tutorial: any) => void) {
-    return API.graphql(graphqlOperation(onCreateTutorial)).subscribe({
-      next: ({ value }: any) => callback(value.data.onCreateTutorial),
-      error: (error: any) => console.error('Subscription error:', error)
+    return generateClient().graphql({
+      query: onCreateTutorial
+    }).subscribe({
+      next: (result) => callback(result.data.onCreateTutorial),
+      error: (error) => console.error('Subscription error:', error)
     });
   }
 };
@@ -251,18 +152,12 @@ export const tutorialService = {
 export const driveService = {
   async create(drive: any) {
     try {
-      const result = await API.graphql(graphqlOperation(`
-        mutation CreateDrive($input: CreateDriveInput!) {
-          createDrive(input: $input) {
-            id
-            company
-            driveTitle
-            status
-            createdAt
-            updatedAt
-          }
-        }
-      `, { input: drive }));
+      const client = generateClient();
+      const result = await client.graphql({
+        query: createDrive,
+        variables: { input: drive },
+        authMode: 'userPool'
+      });
       return result.data.createDrive;
     } catch (error) {
       console.error('Error creating drive:', error);
@@ -272,17 +167,12 @@ export const driveService = {
 
   async update(drive: any) {
     try {
-      const result = await API.graphql(graphqlOperation(`
-        mutation UpdateDrive($input: UpdateDriveInput!) {
-          updateDrive(input: $input) {
-            id
-            company
-            driveTitle
-            status
-            updatedAt
-          }
-        }
-      `, { input: drive }));
+      const client = generateClient();
+      const result = await client.graphql({
+        query: updateDrive,
+        variables: { input: drive },
+        authMode: 'userPool'
+      });
       return result.data.updateDrive;
     } catch (error) {
       console.error('Error updating drive:', error);
@@ -292,13 +182,12 @@ export const driveService = {
 
   async delete(id: string) {
     try {
-      const result = await API.graphql(graphqlOperation(`
-        mutation DeleteDrive($input: DeleteDriveInput!) {
-          deleteDrive(input: $input) {
-            id
-          }
-        }
-      `, { input: { id } }));
+      const client = generateClient();
+      const result = await client.graphql({
+        query: deleteDrive,
+        variables: { input: { id } },
+        authMode: 'userPool'
+      });
       return result.data.deleteDrive;
     } catch (error) {
       console.error('Error deleting drive:', error);
@@ -308,41 +197,10 @@ export const driveService = {
 
   async list() {
     try {
-      const result = await API.graphql(graphqlOperation(`
-        query ListDrives {
-          listDrives {
-            items {
-              id
-              company
-              driveTitle
-              driveType
-              description
-              startDate
-              endDate
-              location
-              remote
-              appLink
-              branches
-              years
-              cgpa
-              backlog
-              regWindow
-              seatCap
-              notify
-              notifTemplate
-              reminders
-              approval
-              visibility
-              module
-              thumbnailUrl
-              status
-              createdAt
-              updatedAt
-              owner
-            }
-          }
-        }
-      `));
+      const client = generateClient();
+      const result = await client.graphql({
+        query: listDrives
+      });
       return result.data.listDrives.items;
     } catch (error) {
       console.error('Error listing drives:', error);
@@ -352,39 +210,11 @@ export const driveService = {
 
   async get(id: string) {
     try {
-      const result = await API.graphql(graphqlOperation(`
-        query GetDrive($id: ID!) {
-          getDrive(id: $id) {
-            id
-            company
-            driveTitle
-            driveType
-            description
-            startDate
-            endDate
-            location
-            remote
-            appLink
-            branches
-            years
-            cgpa
-            backlog
-            regWindow
-            seatCap
-            notify
-            notifTemplate
-            reminders
-            approval
-            visibility
-            module
-            thumbnailUrl
-            status
-            createdAt
-            updatedAt
-            owner
-          }
-        }
-      `, { id }));
+      const client = generateClient();
+      const result = await client.graphql({
+        query: getDrive,
+        variables: { id }
+      });
       return result.data.getDrive;
     } catch (error) {
       console.error('Error getting drive:', error);
@@ -397,7 +227,12 @@ export const driveService = {
 export const quizService = {
   async create(quiz: any) {
     try {
-      const result = await API.graphql(graphqlOperation(createQuiz, { input: quiz }));
+      const client = generateClient();
+      const result = await client.graphql({
+        query: createQuiz,
+        variables: { input: quiz },
+        authMode: 'userPool'
+      });
       return result.data.createQuiz;
     } catch (error) {
       console.error('Error creating quiz:', error);
@@ -407,7 +242,12 @@ export const quizService = {
 
   async update(quiz: any) {
     try {
-      const result = await API.graphql(graphqlOperation(updateQuiz, { input: quiz }));
+      const client = generateClient();
+      const result = await client.graphql({
+        query: updateQuiz,
+        variables: { input: quiz },
+        authMode: 'userPool'
+      });
       return result.data.updateQuiz;
     } catch (error) {
       console.error('Error updating quiz:', error);
@@ -417,7 +257,12 @@ export const quizService = {
 
   async delete(id: string) {
     try {
-      const result = await API.graphql(graphqlOperation(deleteQuiz, { input: { id } }));
+      const client = generateClient();
+      const result = await client.graphql({
+        query: deleteQuiz,
+        variables: { input: { id } },
+        authMode: 'userPool'
+      });
       return result.data.deleteQuiz;
     } catch (error) {
       console.error('Error deleting quiz:', error);
@@ -427,7 +272,10 @@ export const quizService = {
 
   async list() {
     try {
-      const result = await API.graphql(graphqlOperation(listQuizzes));
+      const client = generateClient();
+      const result = await client.graphql({
+        query: listQuizzes
+      });
       return result.data.listQuizzes.items;
     } catch (error) {
       console.error('Error listing quizzes:', error);
@@ -437,7 +285,11 @@ export const quizService = {
 
   async get(id: string) {
     try {
-      const result = await API.graphql(graphqlOperation(getQuiz, { id }));
+      const client = generateClient();
+      const result = await client.graphql({
+        query: getQuiz,
+        variables: { id }
+      });
       return result.data.getQuiz;
     } catch (error) {
       console.error('Error getting quiz:', error);
@@ -450,7 +302,12 @@ export const quizService = {
 export const collegeService = {
   async create(college: any) {
     try {
-      const result = await API.graphql(graphqlOperation(createCollege, { input: college }));
+      const client = generateClient();
+      const result = await client.graphql({
+        query: createCollege,
+        variables: { input: college },
+        authMode: 'userPool'
+      });
       return result.data.createCollege;
     } catch (error) {
       console.error('Error creating college:', error);
@@ -460,7 +317,12 @@ export const collegeService = {
 
   async update(college: any) {
     try {
-      const result = await API.graphql(graphqlOperation(updateCollege, { input: college }));
+      const client = generateClient();
+      const result = await client.graphql({
+        query: updateCollege,
+        variables: { input: college },
+        authMode: 'userPool'
+      });
       return result.data.updateCollege;
     } catch (error) {
       console.error('Error updating college:', error);
@@ -470,7 +332,12 @@ export const collegeService = {
 
   async delete(id: string) {
     try {
-      const result = await API.graphql(graphqlOperation(deleteCollege, { input: { id } }));
+      const client = generateClient();
+      const result = await client.graphql({
+        query: deleteCollege,
+        variables: { input: { id } },
+        authMode: 'userPool'
+      });
       return result.data.deleteCollege;
     } catch (error) {
       console.error('Error deleting college:', error);
@@ -480,7 +347,10 @@ export const collegeService = {
 
   async list() {
     try {
-      const result = await API.graphql(graphqlOperation(listColleges));
+      const client = generateClient();
+      const result = await client.graphql({
+        query: listColleges
+      });
       return result.data.listColleges.items;
     } catch (error) {
       console.error('Error listing colleges:', error);
@@ -490,7 +360,11 @@ export const collegeService = {
 
   async get(id: string) {
     try {
-      const result = await API.graphql(graphqlOperation(getCollege, { id }));
+      const client = generateClient();
+      const result = await client.graphql({
+        query: getCollege,
+        variables: { id }
+      });
       return result.data.getCollege;
     } catch (error) {
       console.error('Error getting college:', error);
@@ -503,7 +377,12 @@ export const collegeService = {
 export const announcementService = {
   async create(announcement: any) {
     try {
-      const result = await API.graphql(graphqlOperation(createAnnouncement, { input: announcement }));
+      const client = generateClient();
+      const result = await client.graphql({
+        query: createAnnouncement,
+        variables: { input: announcement },
+        authMode: 'userPool'
+      });
       return result.data.createAnnouncement;
     } catch (error) {
       console.error('Error creating announcement:', error);
@@ -513,7 +392,12 @@ export const announcementService = {
 
   async update(announcement: any) {
     try {
-      const result = await API.graphql(graphqlOperation(updateAnnouncement, { input: announcement }));
+      const client = generateClient();
+      const result = await client.graphql({
+        query: updateAnnouncement,
+        variables: { input: announcement },
+        authMode: 'userPool'
+      });
       return result.data.updateAnnouncement;
     } catch (error) {
       console.error('Error updating announcement:', error);
@@ -523,7 +407,12 @@ export const announcementService = {
 
   async delete(id: string) {
     try {
-      const result = await API.graphql(graphqlOperation(deleteAnnouncement, { input: { id } }));
+      const client = generateClient();
+      const result = await client.graphql({
+        query: deleteAnnouncement,
+        variables: { input: { id } },
+        authMode: 'userPool'
+      });
       return result.data.deleteAnnouncement;
     } catch (error) {
       console.error('Error deleting announcement:', error);
@@ -533,7 +422,10 @@ export const announcementService = {
 
   async list() {
     try {
-      const result = await API.graphql(graphqlOperation(listAnnouncements));
+      const client = generateClient();
+      const result = await client.graphql({
+        query: listAnnouncements
+      });
       return result.data.listAnnouncements.items;
     } catch (error) {
       console.error('Error listing announcements:', error);
@@ -543,7 +435,11 @@ export const announcementService = {
 
   async get(id: string) {
     try {
-      const result = await API.graphql(graphqlOperation(getAnnouncement, { id }));
+      const client = generateClient();
+      const result = await client.graphql({
+        query: getAnnouncement,
+        variables: { id }
+      });
       return result.data.getAnnouncement;
     } catch (error) {
       console.error('Error getting announcement:', error);
@@ -556,7 +452,12 @@ export const announcementService = {
 export const leaderboardService = {
   async create(leaderboard: any) {
     try {
-      const result = await API.graphql(graphqlOperation(createLeaderboard, { input: leaderboard }));
+      const client = generateClient();
+      const result = await client.graphql({
+        query: createLeaderboard,
+        variables: { input: leaderboard },
+        authMode: 'userPool'
+      });
       return result.data.createLeaderboard;
     } catch (error) {
       console.error('Error creating leaderboard:', error);
@@ -566,7 +467,12 @@ export const leaderboardService = {
 
   async update(leaderboard: any) {
     try {
-      const result = await API.graphql(graphqlOperation(updateLeaderboard, { input: leaderboard }));
+      const client = generateClient();
+      const result = await client.graphql({
+        query: updateLeaderboard,
+        variables: { input: leaderboard },
+        authMode: 'userPool'
+      });
       return result.data.updateLeaderboard;
     } catch (error) {
       console.error('Error updating leaderboard:', error);
@@ -576,7 +482,12 @@ export const leaderboardService = {
 
   async delete(id: string) {
     try {
-      const result = await API.graphql(graphqlOperation(deleteLeaderboard, { input: { id } }));
+      const client = generateClient();
+      const result = await client.graphql({
+        query: deleteLeaderboard,
+        variables: { input: { id } },
+        authMode: 'userPool'
+      });
       return result.data.deleteLeaderboard;
     } catch (error) {
       console.error('Error deleting leaderboard:', error);
@@ -586,7 +497,10 @@ export const leaderboardService = {
 
   async list() {
     try {
-      const result = await API.graphql(graphqlOperation(listLeaderboards));
+      const client = generateClient();
+      const result = await client.graphql({
+        query: listLeaderboards
+      });
       return result.data.listLeaderboards.items;
     } catch (error) {
       console.error('Error listing leaderboards:', error);
@@ -596,7 +510,11 @@ export const leaderboardService = {
 
   async get(id: string) {
     try {
-      const result = await API.graphql(graphqlOperation(getLeaderboard, { id }));
+      const client = generateClient();
+      const result = await client.graphql({
+        query: getLeaderboard,
+        variables: { id }
+      });
       return result.data.getLeaderboard;
     } catch (error) {
       console.error('Error getting leaderboard:', error);
@@ -609,7 +527,12 @@ export const leaderboardService = {
 export const analyticsService = {
   async create(analytics: any) {
     try {
-      const result = await API.graphql(graphqlOperation(createAnalytics, { input: analytics }));
+      const client = generateClient();
+      const result = await client.graphql({
+        query: createAnalytics,
+        variables: { input: analytics },
+        authMode: 'userPool'
+      });
       return result.data.createAnalytics;
     } catch (error) {
       console.error('Error creating analytics:', error);
@@ -619,7 +542,12 @@ export const analyticsService = {
 
   async update(analytics: any) {
     try {
-      const result = await API.graphql(graphqlOperation(updateAnalytics, { input: analytics }));
+      const client = generateClient();
+      const result = await client.graphql({
+        query: updateAnalytics,
+        variables: { input: analytics },
+        authMode: 'userPool'
+      });
       return result.data.updateAnalytics;
     } catch (error) {
       console.error('Error updating analytics:', error);
@@ -629,7 +557,12 @@ export const analyticsService = {
 
   async delete(id: string) {
     try {
-      const result = await API.graphql(graphqlOperation(deleteAnalytics, { input: { id } }));
+      const client = generateClient();
+      const result = await client.graphql({
+        query: deleteAnalytics,
+        variables: { input: { id } },
+        authMode: 'userPool'
+      });
       return result.data.deleteAnalytics;
     } catch (error) {
       console.error('Error deleting analytics:', error);
@@ -639,7 +572,10 @@ export const analyticsService = {
 
   async list() {
     try {
-      const result = await API.graphql(graphqlOperation(listAnalytics));
+      const client = generateClient();
+      const result = await client.graphql({
+        query: listAnalytics
+      });
       return result.data.listAnalytics.items;
     } catch (error) {
       console.error('Error listing analytics:', error);
@@ -649,7 +585,11 @@ export const analyticsService = {
 
   async get(id: string) {
     try {
-      const result = await API.graphql(graphqlOperation(getAnalytics, { id }));
+      const client = generateClient();
+      const result = await client.graphql({
+        query: getAnalytics,
+        variables: { id }
+      });
       return result.data.getAnalytics;
     } catch (error) {
       console.error('Error getting analytics:', error);
@@ -663,7 +603,7 @@ export const storageService = {
   async uploadFile(file: File, folder: string = 'uploads'): Promise<string> {
     try {
       const key = `${folder}/${Date.now()}_${file.name}`;
-      const result = await Storage.put(key, file, {
+      const result = await uploadData(key, file, {
         contentType: file.type,
         level: 'public'
       });
@@ -676,7 +616,7 @@ export const storageService = {
 
   async getFileUrl(key: string): Promise<string> {
     try {
-      return await Storage.get(key);
+      return await getUrl(key);
     } catch (error) {
       console.error('Error getting file URL:', error);
       throw error;
@@ -685,7 +625,7 @@ export const storageService = {
 
   async deleteFile(key: string): Promise<void> {
     try {
-      await Storage.remove(key);
+      await remove(key);
     } catch (error) {
       console.error('Error deleting file:', error);
       throw error;
@@ -695,9 +635,38 @@ export const storageService = {
 
 // Auth Services
 export const authService = {
+  async signUp(email: string, password: string) {
+    try {
+      const result = await signUp({
+        username: email,
+        password,
+        options: {
+          userAttributes: {
+            email,
+          },
+        },
+      });
+      return result;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  async confirmSignUp(username: string, confirmationCode: string) {
+    try {
+      const result = await confirmSignUpAmplify({
+        username,
+        confirmationCode,
+      });
+      return result;
+    } catch (error) {
+      throw error;
+    }
+  },
+
   async signIn(email: string, password: string) {
     try {
-      const user = await Auth.signIn(email, password);
+      const user = await signIn({ username: email, password });
       return user;
     } catch (error) {
       console.error('Error signing in:', error);
@@ -707,7 +676,7 @@ export const authService = {
 
   async signOut() {
     try {
-      await Auth.signOut();
+      await signOut();
     } catch (error) {
       console.error('Error signing out:', error);
       throw error;
@@ -716,25 +685,23 @@ export const authService = {
 
   async getCurrentUser() {
     try {
-      return await Auth.getCurrentUser();
+      return await getCurrentUser();
     } catch (error) {
-      console.error('Error getting current user:', error);
-      return null;
+      throw error;
     }
   },
 
   async getCurrentAuthenticatedUser() {
     try {
-      return await Auth.getCurrentAuthenticatedUser();
+      return await getCurrentUser();
     } catch (error) {
-      console.error('Error getting authenticated user:', error);
-      return null;
+      throw error;
     }
   },
 
   async getCurrentUserInfo() {
     try {
-      return await Auth.getCurrentUserInfo();
+      return await fetchUserAttributes();
     } catch (error) {
       console.error('Error getting user info:', error);
       return null;

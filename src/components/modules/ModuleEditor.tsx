@@ -21,10 +21,11 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { AddLessonModal } from '@/components/modules/AddLessonModal';
-import { collection, addDoc, doc, updateDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { storage } from "@/lib/firebase";
+import { generateClient } from 'aws-amplify/api';
+import { uploadData } from 'aws-amplify/storage';
+import * as mutations from '@/graphql/mutations';
+
+const client = generateClient();
 
 interface Lesson {
   id: string;
@@ -105,40 +106,43 @@ export function ModuleEditor({ module, onClose, onSave }: ModuleEditorProps) {
       setUploadError("Please upload a thumbnail image before saving.");
       return;
     }
-    const now = new Date().toISOString();
-    if (module && module.id) {
-      // Update existing module
-      const moduleRef = doc(db, "modules", module.id);
-      await updateDoc(moduleRef, {
-        ...deepRemoveUndefined(formData),
-        lastEdited: now,
-      });
-    } else {
-      // Create new module
-      await addDoc(collection(db, "modules"), {
-        ...deepRemoveUndefined(formData),
-        lastEdited: now,
-      });
+
+    try {
+        const moduleData = { ...formData };
+        // Remove unnecessary fields for API
+        delete moduleData.lessons; 
+
+        if (module && module.id) {
+            // Update existing module
+            await client.graphql({
+                query: mutations.updateModule,
+                variables: { input: { id: module.id, ...moduleData } }
+            });
+        } else {
+            // Create new module
+            await client.graphql({
+                query: mutations.createModule,
+                variables: { input: moduleData }
+            });
+        }
+        if (onSave) onSave();
+        onClose();
+    } catch (error) {
+        console.error("Error saving module:", error);
     }
-    if (onSave) onSave();
-    onClose();
   };
 
   const handleThumbnailUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Reset error state
     setUploadError(null);
-
-    // Validate file type
     const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     if (!validTypes.includes(file.type)) {
       setUploadError('Please upload a valid image file (JPEG, PNG, GIF, or WebP)');
       return;
     }
 
-    // Validate file size (max 5MB)
     const maxSize = 5 * 1024 * 1024; // 5MB in bytes
     if (file.size > maxSize) {
       setUploadError('Image size should be less than 5MB');
@@ -147,41 +151,22 @@ export function ModuleEditor({ module, onClose, onSave }: ModuleEditorProps) {
 
     setUploading(true);
     try {
-      // Create a safe filename by removing special characters and spaces
       const safeFileName = file.name.replace(/[^a-zA-Z0-9.]/g, '_').toLowerCase();
       const timestamp = Date.now();
-      const fileName = `${timestamp}_${safeFileName}`;
+      const fileName = `module-thumbnails/${timestamp}_${safeFileName}`;
       
-      // Create a reference to the file location in Firebase Storage
-      const storageRef = ref(storage, `module-thumbnails/${fileName}`);
+      const result = await uploadData({
+        key: fileName,
+        data: file,
+      }).result;
       
-      // Upload the file
-      const uploadResult = await uploadBytes(storageRef, file);
+      // Update form data with new key. We will construct the URL when displaying.
+      setFormData(prev => ({ ...prev, thumbnailUrl: result.key }));
       
-      // Get the download URL
-      const downloadURL = await getDownloadURL(uploadResult.ref);
-      
-      // Update form data with new URL
-      setFormData(prev => ({ ...prev, thumbnailUrl: downloadURL }));
-      
-      // Clear any previous errors
       setUploadError(null);
     } catch (err) {
       console.error('Upload error:', err);
-      // Provide more specific error messages based on the error type
-      if (err instanceof Error) {
-        if (err.message.includes('storage/unauthorized')) {
-          setUploadError('You do not have permission to upload files.');
-        } else if (err.message.includes('storage/canceled')) {
-          setUploadError('Upload was canceled.');
-        } else if (err.message.includes('storage/retry-limit-exceeded')) {
-          setUploadError('Upload failed after multiple retries. Please try again.');
-        } else {
-          setUploadError('Failed to upload image. Please try again.');
-        }
-      } else {
-        setUploadError('An unexpected error occurred. Please try again.');
-      }
+      setUploadError('Failed to upload image. Please try again.');
     } finally {
       setUploading(false);
     }

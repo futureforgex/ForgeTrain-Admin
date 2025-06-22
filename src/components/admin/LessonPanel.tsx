@@ -9,11 +9,13 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { db } from '@/lib/firebase';
-import { doc, setDoc, collection, addDoc, serverTimestamp, getDocs, query, where } from 'firebase/firestore';
+import { tutorialService, driveService, quizService, collegeService } from '@/lib/amplifyServices';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { FileUploader } from '@/components/ui/file-uploader';
+import { generateClient } from 'aws-amplify/api';
+import * as queries from '@/graphql/queries';
+import * as mutations from '@/graphql/mutations';
 
 interface LessonPanelProps {
   onClose: () => void;
@@ -121,6 +123,7 @@ export function LessonPanel({ onClose, onSave, initialData, type }: LessonPanelP
   const [ccEditorialSteps, setCcEditorialSteps] = useState(form.codeChallenge?.editorialSteps || [{ order: 1, title: '', content: '', codeSample: { python: '' } }]);
   const [existingContent, setExistingContent] = useState<any[]>([]);
   const [loadingContent, setLoadingContent] = useState(false);
+  const client = generateClient();
 
   // Real-time validation (example for required fields)
   const validate = () => {
@@ -178,31 +181,33 @@ export function LessonPanel({ onClose, onSave, initialData, type }: LessonPanelP
           editorialSteps: ccEditorialSteps,
         };
       }
-      // Choose the correct collection based on lesson type
-      let collectionName = 'lessons';
+      // Choose the correct mutation based on lesson type
+      let mutation;
+      let input = {
+        ...form,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
       switch (form.type) {
         case 'code':
-          collectionName = 'challenges';
+          mutation = mutations.createChallenge;
           break;
         case 'project':
-          collectionName = 'projectTasks';
+          mutation = mutations.createProjectTask;
           break;
         case 'video':
-          collectionName = 'videoTutorials';
+          mutation = mutations.createVideoTutorial;
           break;
         case 'article':
-          collectionName = 'tutorials';
+          mutation = mutations.createTutorial;
           break;
         case 'quiz':
-          collectionName = 'quizzes';
+          mutation = mutations.createQuiz;
           break;
+        default:
+          mutation = mutations.createLesson;
       }
-      // Save to Firestore
-      await addDoc(collection(db, collectionName), {
-        ...form,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
+      await client.graphql({ query: mutation, variables: { input } });
       onSave(form); // Optionally update local state/UI
       setLoading(false);
       onClose();
@@ -214,47 +219,29 @@ export function LessonPanel({ onClose, onSave, initialData, type }: LessonPanelP
 
   const fetchExistingContent = async (type: string) => {
     try {
-      let collectionName = '';
+      let query;
       switch (type) {
         case 'video':
-          collectionName = 'videoTutorials';
+          query = queries.listVideoTutorials;
           break;
         case 'article':
-          collectionName = 'tutorials';
+          query = queries.listTutorials;
           break;
         case 'code':
-          collectionName = 'challenges';
+          query = queries.listChallenges;
           break;
         case 'quiz':
-          collectionName = 'quizzes';
+          query = queries.listQuizzes;
           break;
         case 'project':
-          collectionName = 'projectTasks';
+          query = queries.listProjectTasks;
           break;
         default:
           return [];
       }
-
-      const q = query(collection(db, collectionName));
-      const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => {
-        const data = doc.data();
-        // For code challenges, map fields as needed
-        if (type === 'code') {
-          return {
-            id: doc.id,
-            ...data,
-            title: data.slug || doc.id,
-            description: data.description || '',
-            difficulty: data.difficulty || 'Easy',
-            starterCode: data.starterCode || { python: '' },
-            testCases: data.testCases || [],
-            hints: data.hints || [],
-            editorialSteps: data.editorialSteps || [],
-          };
-        }
-        return { id: doc.id, ...data };
-      });
+      const { data } = await client.graphql({ query, variables: { limit: 1000 } });
+      const items = Object.values(data)[0]?.items || [];
+      return items;
     } catch (error) {
       console.error('Error fetching content:', error);
       return [];

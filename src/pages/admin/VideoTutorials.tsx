@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { firestore, storage } from '@/lib/firebase';
-import { collection, getDocs, deleteDoc, doc, updateDoc, addDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { tutorialService, storageService } from '@/lib/amplifyServices';
+
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Edit, Trash2, Eye, Plus, Save, Video, Settings } from 'lucide-react';
@@ -75,21 +74,55 @@ export default function VideoTutorials() {
   });
   const { toast } = useToast();
 
-  // Helper for uploading a file to Firebase Storage
-  async function uploadFileToStorage(file, folder = 'video-tutorials') {
-    const fileRef = ref(storage, `${folder}/${Date.now()}_${file.name}`);
-    await uploadBytes(fileRef, file);
-    return await getDownloadURL(fileRef);
+  // Helper for uploading a file to Amplify Storage
+  async function uploadFileToStorage(file: File, folder = 'video-tutorials') {
+    try {
+      const key = `${folder}/${Date.now()}_${file.name}`;
+      const url = await storageService.uploadFile(file, folder);
+      return url;
+    } catch (error) {
+      console.error('Error uploading file:', error);
+      throw error;
+    }
   }
 
   const fetchTutorials = async () => {
     setLoading(true);
     setError(null);
     try {
-      const snap = await getDocs(collection(firestore, 'videoTutorials'));
-      setTutorials(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as VideoTutorial)));
+      // For now, we'll use the tutorial service and filter for video tutorials
+      // In a real implementation, you'd have a separate videoTutorials service
+      const allTutorials = await tutorialService.list();
+      const videoTutorials = allTutorials
+        .filter((tutorial: any) => tutorial.videoUrl || tutorial.videoType)
+        .map((tutorial: any) => ({
+          id: tutorial.id,
+          title: tutorial.title,
+          slug: tutorial.slug,
+          description: tutorial.description || tutorial.subtitle,
+          videoUrl: tutorial.videoUrl,
+          videoType: tutorial.videoType || 'youtube',
+          category: tutorial.category,
+          tags: tutorial.tags || [],
+          status: tutorial.status || 'draft',
+          publishDate: tutorial.publishDate,
+          metaDescription: tutorial.metaDescription,
+          readingLevel: tutorial.readingLevel || 'easy',
+          createdAt: tutorial.createdAt,
+          updatedAt: tutorial.updatedAt,
+          videoSource: tutorial.videoSource || 'embed',
+          thumbnailUrl: tutorial.thumbnailUrl || tutorial.coverImageUrl,
+          captions: tutorial.captions || [],
+          transcript: tutorial.transcript,
+          estimatedWatchTime: tutorial.estimatedWatchTime || tutorial.estimatedTimeMins,
+          prerequisites: tutorial.prerequisites || [],
+          visibility: tutorial.visibility || 'public',
+        } as VideoTutorial));
+      
+      setTutorials(videoTutorials);
     } catch (err) {
       setError('Failed to load video tutorials');
+      console.error('Error fetching tutorials:', err);
     } finally {
       setLoading(false);
     }
@@ -103,11 +136,12 @@ export default function VideoTutorials() {
     if (!confirm('Are you sure you want to delete this video tutorial?')) return;
     setDeletingId(id);
     try {
-      await deleteDoc(doc(firestore, 'videoTutorials', id));
+      await tutorialService.delete(id);
       await fetchTutorials();
       toast({ title: 'Success', description: 'Video tutorial deleted successfully' });
     } catch (err) {
       toast({ title: 'Error', description: 'Failed to delete video tutorial', variant: 'destructive' });
+      console.error('Error deleting tutorial:', err);
     } finally {
       setDeletingId(null);
     }
@@ -123,17 +157,22 @@ export default function VideoTutorials() {
       return;
     }
     try {
+      const tutorialData = {
+        ...currentTutorial,
+        updatedAt: new Date(),
+        // Map video tutorial fields to tutorial fields
+        subtitle: currentTutorial.description,
+        coverImageUrl: currentTutorial.thumbnailUrl,
+        estimatedTimeMins: currentTutorial.estimatedWatchTime,
+      };
+
       if (editId) {
-        await updateDoc(doc(firestore, 'videoTutorials', editId), {
-          ...currentTutorial,
-          updatedAt: new Date(),
-        });
+        await tutorialService.update({ id: editId, ...tutorialData });
         toast({ title: 'Success', description: 'Video tutorial updated successfully' });
       } else {
-        await addDoc(collection(firestore, 'videoTutorials'), {
-          ...currentTutorial,
+        await tutorialService.create({
+          ...tutorialData,
           createdAt: new Date(),
-          updatedAt: new Date(),
         });
         toast({ title: 'Success', description: 'Video tutorial created successfully' });
       }
@@ -142,6 +181,7 @@ export default function VideoTutorials() {
       fetchTutorials();
     } catch (err) {
       toast({ title: 'Error', description: 'Failed to save video tutorial', variant: 'destructive' });
+      console.error('Error saving tutorial:', err);
     }
   };
 

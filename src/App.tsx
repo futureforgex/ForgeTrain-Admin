@@ -16,6 +16,7 @@ import VideoTutorials from './pages/admin/VideoTutorials';
 import ProjectTasks from './pages/admin/ProjectTasks';
 import ModulePage from './pages/admin/ModulePage';
 import LoginPage from "@/pages/admin/LoginPage";
+import SignUpPage from "@/pages/admin/SignUpPage";
 import RequireAuth from "@/components/auth/RequireAuth";
 import PlacementDrives from './pages/admin/PlacementDrives';
 import { createContext, useContext, useEffect, useState } from "react";
@@ -57,8 +58,9 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <Routes>
-            {/* Login route is public */}
+            {/* Public routes */}
             <Route path="/admin/login" element={<LoginPage />} />
+            <Route path="/admin/register" element={<SignUpPage />} />
 
             {/* All other routes require authentication */}
             <Route element={<RequireAuth />}>

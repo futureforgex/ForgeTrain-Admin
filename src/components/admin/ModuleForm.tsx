@@ -21,13 +21,15 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
-import { firestore, storage } from '@/lib/firebase';
-import { collection, addDoc, Timestamp } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { generateClient } from 'aws-amplify/api';
+import { uploadData } from 'aws-amplify/storage';
+import * as mutations from '@/graphql/mutations';
+import { LessonPanel } from './LessonPanel';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { FileUploader } from '@/components/ui/file-uploader';
 import { GripVertical, MoreVertical, Edit, Trash2, Eye, Copy, Plus } from 'lucide-react';
-import { LessonPanel } from './LessonPanel';
+
+const client = generateClient();
 
 interface ModuleFormProps {
   onClose: () => void;
@@ -137,23 +139,41 @@ export function ModuleForm({ onClose }: ModuleFormProps) {
 
   const handleSubmit = useCallback(async (publish: boolean) => {
     const currentErrors = validateForm(formData);
-    if (Object.keys(currentErrors).length > 0) return;
+    if (Object.keys(currentErrors).length > 0) {
+      toast({
+        title: 'Validation Error',
+        description: 'Please fix the errors before submitting.',
+        variant: 'destructive',
+      });
+      return;
+    }
     setLoading(true);
     let thumbnailUrl = '';
     try {
       // Upload thumbnail if present
       if (formData.thumbnail) {
-        const storageRef = ref(storage, `module-thumbnails/${Date.now()}-${formData.thumbnail.name}`);
-        await uploadBytes(storageRef, formData.thumbnail);
-        thumbnailUrl = await getDownloadURL(storageRef);
+         const result = await uploadData({
+           path: `module-thumbnails/${Date.now()}-${formData.thumbnail.name}`,
+           data: formData.thumbnail,
+         }).result;
+         thumbnailUrl = result.path;
       }
-      // Store module in Firestore
-      await addDoc(collection(firestore, 'modules'), {
-        ...formData,
-        thumbnail: thumbnailUrl,
-        createdAt: Timestamp.now(),
+      
+      // Prepare data for GraphQL mutation, excluding the File object
+      const { thumbnail, ...restOfFormData } = formData;
+      
+      const moduleInput = {
+        ...restOfFormData,
+        thumbnailUrl,
         status: publish ? 'live' : 'draft',
+      };
+
+      // Store module in DynamoDB via AppSync
+      await client.graphql({
+        query: mutations.createModule,
+        variables: { input: moduleInput },
       });
+
       toast({
         title: publish ? 'Module published!' : 'Draft saved',
         description: publish
@@ -162,7 +182,8 @@ export function ModuleForm({ onClose }: ModuleFormProps) {
       });
       onClose();
     } catch (err) {
-      toast({ title: 'Error', description: 'Failed to save module', variant: 'destructive' });
+      console.error('Error saving module:', err);
+      toast({ title: 'Error', description: 'Failed to save module. Check console for details.', variant: 'destructive' });
     } finally {
       setLoading(false);
     }

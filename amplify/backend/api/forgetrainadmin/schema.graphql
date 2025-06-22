@@ -1,0 +1,324 @@
+# This "input" configures a global authorization rule to enable public access to
+# all models in this schema. Learn more about authorization rules here: https://docs.amplify.aws/cli/graphql/authorization-rules
+input AMPLIFY { globalAuthRule: AuthRule = { allow: public } } # FOR TESTING ONLY!
+
+type Tutorial @model @auth(rules: [{ allow: owner }, { allow: public, operations: [read] }]) {
+  id: ID!
+  tutorialId: String!
+  topicId: String!
+  title: String!
+  subtitle: String
+  coverImageUrl: String
+  altText: String
+  estimatedTimeMins: Int
+  readingLevel: String
+  preferredLearningStyle: [String]
+  storyContext: String
+  learningObjectives: [String]
+  prerequisites: [String]
+  biteSizeSections: [BiteSizeSection]
+  keyTakeaways: [String]
+  funFact: String
+  reflectionPrompt: String
+  discussionThreadUrl: String
+  progressBadge: String
+  xpPoints: Int
+  streakMultiplier: Boolean
+  milestoneBadges: [String]
+  spacedRepetitionId: String
+  nextTutorialId: String
+  body: String
+  metaDescription: String
+  category: String
+  tags: [String]
+  status: String
+  publishDate: AWSDateTime
+  introduction: String
+  conclusion: String
+  images: [Image]
+  diagrams: [Image]
+  downloadableAssets: [Asset]
+  codeSnippets: [CodeSnippet]
+  slug: String
+  estimatedReadTime: Int
+  filledSummary: String
+  builtInPoints: [String]
+  createdAt: AWSDateTime
+  updatedAt: AWSDateTime
+  owner: String
+}
+
+type BiteSizeSection {
+  sectionId: String!
+  heading: String!
+  contentMd: String
+  humorTip: String
+  mnemonic: String
+  codeSnippet: CodeSnippetData
+  challengePrompt: String
+  sectionQuiz: [QuizQuestion]
+  playgroundEmbedId: String
+  autoCheckSnippet: Boolean
+}
+
+type CodeSnippetData {
+  language: String
+  code: String
+  explanations: [String]
+}
+
+type QuizQuestion {
+  question: String!
+  options: [String]!
+  correctAnswer: Int!
+  explanation: String
+}
+
+type Image {
+  url: String!
+  alt: String!
+}
+
+type Asset {
+  url: String!
+  name: String!
+  type: String!
+}
+
+type CodeSnippet {
+  url: String!
+  name: String!
+}
+
+type Drive @model @auth(rules: [{ allow: owner }, { allow: public, operations: [read] }]) {
+  id: ID!
+  company: String
+  driveTitle: String
+  driveType: String
+  description: String
+  startDate: AWSDate
+  endDate: AWSDate
+  location: String
+  remote: Boolean
+  appLink: String
+  branches: [String]
+  years: [String]
+  cgpa: String
+  backlog: String
+  regWindow: String
+  seatCap: String
+  notify: Boolean
+  notifTemplate: String
+  reminders: [String]
+  approval: String
+  visibility: String
+  module: String
+  thumbnailUrl: String
+  status: String
+  createdAt: AWSDateTime
+  updatedAt: AWSDateTime
+  owner: String
+}
+
+type Quiz @model @auth(rules: [{ allow: owner }, { allow: public, operations: [read] }]) {
+  id: ID!
+  title: String!
+  slug: String
+  description: String
+  category: String
+  totalTime: Int
+  passingScore: Int
+  tags: [String]
+  questions: [QuizQuestion]
+  settings: QuizSettings
+  status: String
+  createdAt: AWSDateTime
+  updatedAt: AWSDateTime
+  owner: String
+}
+
+type QuizSettings {
+  allowRetake: Boolean
+  showResults: Boolean
+  timeLimit: Int
+  shuffleQuestions: Boolean
+}
+
+type College @model @auth(rules: [{ allow: owner }, { allow: public, operations: [read] }]) {
+  id: ID!
+  name: String!
+  code: String!
+  type: String!
+  website: String
+  logo: String
+  address: Address
+  contact: Contact
+  status: String!
+  hasDepartments: Boolean!
+  notes: String
+  departments: [Department]
+  createdAt: AWSDateTime
+  updatedAt: AWSDateTime
+  owner: String
+}
+
+type Address {
+  line1: String!
+  line2: String
+  city: String!
+  state: String!
+  pinCode: String!
+}
+
+type Contact {
+  name: String!
+  email: String!
+  phone: String!
+}
+
+type Department {
+  id: String!
+  name: String!
+  level: String!
+  hod: String!
+  status: String!
+}
+
+type Announcement @model @auth(rules: [{ allow: owner }, { allow: public, operations: [read] }]) {
+  id: ID!
+  title: String!
+  content: String!
+  category: String
+  priority: String
+  targetAudience: [String]
+  publishDate: AWSDateTime
+  expiryDate: AWSDateTime
+  status: String
+  createdBy: String
+  createdAt: AWSDateTime
+  updatedAt: AWSDateTime
+  owner: String
+}
+
+type Leaderboard @model @auth(rules: [{ allow: owner }, { allow: public, operations: [read] }]) {
+  id: ID!
+  userId: String!
+  username: String!
+  totalPoints: Int
+  rank: Int
+  badges: [String]
+  achievements: [String]
+  streakDays: Int
+  lastActivity: AWSDateTime
+  createdAt: AWSDateTime
+  updatedAt: AWSDateTime
+  owner: String
+}
+
+type Analytics @model @auth(rules: [{ allow: owner }]) {
+  id: ID!
+  eventType: String!
+  userId: String
+  sessionId: String
+  pageUrl: String
+  referrer: String
+  userAgent: String
+  ipAddress: String
+  eventData: String
+  createdAt: AWSDateTime
+  owner: String
+}
+
+type Module @model @auth(rules: [{ allow: owner }, { allow: public, operations: [read] }]) {
+  id: ID!
+  title: String!
+  subtitle: String
+  description: String
+  track: String
+  difficulty: String
+  estimatedTime: Int
+  tags: [String]
+  thumbnailUrl: String
+  status: String
+  goLiveDate: AWSDateTime
+  prerequisites: [String]
+  visibility: String
+  completionCriteria: CompletionCriteria
+  is_archived: Boolean
+  created_at: AWSDateTime
+  updated_at: AWSDateTime
+  lessons: [Lesson] @hasMany
+  owner: String
+}
+
+type CompletionCriteria {
+  allLessonsComplete: Boolean
+  passQuiz: Boolean
+  projectComplete: Boolean
+}
+
+type Lesson @model @auth(rules: [{ allow: owner }, { allow: public, operations: [read] }]) {
+  id: ID!
+  title: String!
+  type: String
+  status: String
+  resourceId: String
+  module: Module @belongsTo
+  owner: String
+}
+
+type Challenge @model @auth(rules: [{ allow: owner }, { allow: public, operations: [read] }]) {
+  id: ID!
+  title: String!
+  slug: String!
+  description: String
+  tags: [String]
+  difficulty: String
+  xp_points: Int
+  code_templates: AWSJSON
+  time_limit_ms: Int
+  memory_limit_mb: Int
+  input_constraints: String
+  examples: [Example]
+  sample_tests: [TestCase]
+  hidden_tests: [TestCase]
+  hints: [String]
+  algorithm_overview: String
+  step_by_step_solution: [SolutionStep]
+  full_editorial: String
+  discussion_enabled: Boolean
+  discussion_threads: [String]
+  comments_count: Int
+  submissions_count: Int
+  accepted_count: Int
+  acceptance_rate: Float
+  average_runtime_ms: Int
+  average_memory_mb: Int
+  company_tags: [String]
+  contest_id: String
+  premium_only: Boolean
+  translations: AWSJSON
+  diagram_images: [String]
+  solution_videos: [String]
+  created_at: AWSDateTime
+  updated_at: AWSDateTime
+  version: Int
+  owner: String
+}
+
+type Example {
+  input: String
+  output: String
+  explanation: String
+}
+
+type TestCase {
+  input: String
+  output: String
+}
+
+type SolutionStep {
+  step_number: Int
+  explanation: String
+  pseudocode: String
+}

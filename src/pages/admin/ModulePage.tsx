@@ -7,15 +7,16 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { ModuleList } from '@/components/modules/ModuleList';
 import { ModuleEditor } from '@/components/modules/ModuleEditor';
 import { ModuleFilters } from '@/components/modules/ModuleFilters';
-import { AddLessonModal } from '@/components/modules/AddLessonModal';
-import { collection, addDoc, getDocs, doc, deleteDoc, updateDoc, serverTimestamp } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { generateClient } from 'aws-amplify/api';
+import * as mutations from '@/graphql/mutations';
+import * as queries from '@/graphql/queries';
 import { toast } from 'sonner';
+
+const client = generateClient();
 
 const ModulePage = () => {
   const [isEditorOpen, setIsEditorOpen] = useState(false);
@@ -34,11 +35,8 @@ const ModulePage = () => {
   const fetchModules = async () => {
     setLoading(true);
     try {
-      const querySnapshot = await getDocs(collection(db, "modules"));
-      const modulesData = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+      const result = await client.graphql({ query: queries.listModules });
+      const modulesData = result.data.listModules.items;
       setModules(modulesData);
     } catch (error) {
       console.error('Error fetching modules:', error);
@@ -60,24 +58,21 @@ const ModulePage = () => {
 
   const handleCloneModule = async (module) => {
     try {
-      // Create a new module object without the id
-      const { id, created_at, updated_at, ...moduleData } = module;
+      const { id, createdAt, updatedAt, owner, lessons, ...moduleData } = module;
       
-      // Add clone suffix to title
       const clonedModule = {
         ...moduleData,
         title: `${moduleData.title} (Clone)`,
-        created_at: serverTimestamp(),
-        updated_at: serverTimestamp(),
         status: 'draft',
         is_archived: false
       };
 
-      // Add the new module to Firestore
-      const docRef = await addDoc(collection(db, "modules"), clonedModule);
+      const result = await client.graphql({
+        query: mutations.createModule,
+        variables: { input: clonedModule }
+      });
       
-      // Update local state
-      setModules(prev => [...prev, { id: docRef.id, ...clonedModule }]);
+      setModules(prev => [...prev, result.data.createModule]);
       
       toast.success('Module cloned successfully');
     } catch (error) {
@@ -88,13 +83,16 @@ const ModulePage = () => {
 
   const handleArchiveModule = async (module) => {
     try {
-      const moduleRef = doc(db, "modules", module.id);
-      await updateDoc(moduleRef, {
+      const updatedModule = {
+        id: module.id,
         is_archived: !module.is_archived,
-        updated_at: serverTimestamp()
+      };
+      
+      await client.graphql({
+        query: mutations.updateModule,
+        variables: { input: updatedModule }
       });
 
-      // Update local state
       setModules(prev => prev.map(m => 
         m.id === module.id 
           ? { ...m, is_archived: !m.is_archived }
@@ -114,10 +112,11 @@ const ModulePage = () => {
     }
 
     try {
-      const moduleRef = doc(db, "modules", module.id);
-      await deleteDoc(moduleRef);
+      await client.graphql({
+        query: mutations.deleteModule,
+        variables: { input: { id: module.id } }
+      });
 
-      // Update local state
       setModules(prev => prev.filter(m => m.id !== module.id));
       
       toast.success('Module deleted successfully');
@@ -135,15 +134,15 @@ const ModulePage = () => {
         title: resource.title || resource.name,
         type,
         status: 'draft',
-        resourceRef: resource,
+        resourceRef: resource.id, // Storing resource ID
       }
     ]);
     setAddLessonOpen(false);
   };
 
   const filteredModules = modules.filter(module => 
-    module.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    module.description?.toLowerCase().includes(searchQuery.toLowerCase())
+    (module.title?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
+    (module.description?.toLowerCase() || '').includes(searchQuery.toLowerCase())
   );
 
   return (
