@@ -3,6 +3,8 @@ frontend:
   phases:
     preBuild:
       commands:
+        - npm i -g @aws-amplify/cli
+        - amplify pull --appId dhl17lat108sr --envName main --yes
         - npm ci
         - if [ -f ./amplifyconfiguration.json ]; then mv ./amplifyconfiguration.json ./src/amplifyconfiguration.json; fi
     build:
