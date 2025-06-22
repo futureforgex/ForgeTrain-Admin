@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "npx @aws-amplify/cli pull --appId dhl17lat108sr --envName main --yes && mv amplifyconfiguration.json src/amplifyconfiguration.json && vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview"
